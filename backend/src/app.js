@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
+const complaintRoutes = require('./routes/complaintRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { sendError } = require('./utils/apiResponse');
 
@@ -24,6 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Mount routes
 app.use('/api/auth', authRoutes);
+app.use('/api/complaints', complaintRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api', healthRoutes);
 
