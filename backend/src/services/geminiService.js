@@ -75,11 +75,7 @@ const getFallbackClassification = (description, errorMsg = '') => {
   let severity = 'MEDIUM';
   let issue = 'Civic Infrastructure Concern';
 
-  if (descLower.includes('pothole') || descLower.includes('road') || descLower.includes('asphalt') || descLower.includes('street')) {
-    category = 'road_infrastructure';
-    issue = 'Road Damage / Pothole';
-    severity = 'HIGH';
-  } else if (descLower.includes('garbage') || descLower.includes('trash') || descLower.includes('waste') || descLower.includes('dump')) {
+  if (descLower.includes('garbage') || descLower.includes('trash') || descLower.includes('waste') || descLower.includes('dump')) {
     category = 'garbage_sanitation';
     issue = 'Garbage Accumulation';
     severity = 'MEDIUM';
@@ -87,17 +83,21 @@ const getFallbackClassification = (description, errorMsg = '') => {
     category = 'streetlight_electrical';
     issue = 'Streetlight / Electrical Failure';
     severity = 'HIGH';
-  } else if (descLower.includes('water') || descLower.includes('pipe') || descLower.includes('leak')) {
-    category = 'water_supply';
-    issue = 'Water Leakage / Pipe Damage';
-    severity = 'HIGH';
   } else if (descLower.includes('drain') || descLower.includes('sewer') || descLower.includes('overflow')) {
     category = 'drainage';
     issue = 'Drainage / Sewer Overflow';
     severity = 'CRITICAL';
+  } else if (descLower.includes('water') || descLower.includes('pipe') || descLower.includes('leak')) {
+    category = 'water_supply';
+    issue = 'Water Leakage / Pipe Damage';
+    severity = 'HIGH';
   } else if (descLower.includes('tree') || descLower.includes('branch')) {
     category = 'fallen_tree';
     issue = 'Fallen Tree / Obstruction';
+    severity = 'HIGH';
+  } else if (descLower.includes('pothole') || descLower.includes('road') || descLower.includes('asphalt') || descLower.includes('street')) {
+    category = 'road_infrastructure';
+    issue = 'Road Damage / Pothole';
     severity = 'HIGH';
   }
 
