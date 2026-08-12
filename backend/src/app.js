@@ -4,6 +4,9 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const complaintRoutes = require('./routes/complaintRoutes');
 const workerRoutes = require('./routes/workerRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { sendError } = require('./utils/apiResponse');
 
@@ -28,6 +31,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/worker', workerRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api', healthRoutes);
 

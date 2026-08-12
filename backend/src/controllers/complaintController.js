@@ -8,6 +8,7 @@ const geminiService = require('../services/geminiService');
 const departmentService = require('../services/departmentService');
 const priorityService = require('../services/priorityService');
 const slaService = require('../services/slaService');
+const notificationService = require('../services/notificationService');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 // Allowed status lifecycle transitions
@@ -87,6 +88,15 @@ const createComplaint = async (req, res, next) => {
       user: req.user._id,
       status: 'REPORTED',
       note: 'Complaint filed by citizen'
+    });
+
+    // Trigger notification
+    await notificationService.createNotification({
+      recipient: req.user._id,
+      type: 'COMPLAINT_CREATED',
+      title: 'Complaint Filed',
+      message: `Your complaint #${complaint._id.toString().slice(-6)} has been submitted successfully.`,
+      complaintId: complaint._id
     });
 
     return sendSuccess(res, 201, 'Complaint submitted successfully', complaint.toJSON());
@@ -218,6 +228,70 @@ const getComplaintById = async (req, res, next) => {
 };
 
 /**
+ * @route   GET /api/complaints/:id/timeline
+ * @desc    Get chronological timeline events for a complaint
+ * @access  Private
+ */
+const getComplaintTimeline = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id)
+      .populate('citizen', 'name email phone')
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
+
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Role authorization check
+    const { role, _id } = req.user;
+    const userIdStr = _id.toString();
+
+    if (role === 'CITIZEN') {
+      const citizenIdStr = complaint.citizen._id
+        ? complaint.citizen._id.toString()
+        : complaint.citizen.toString();
+      if (citizenIdStr !== userIdStr) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    } else if (role === 'FIELD_WORKER') {
+      if (!complaint.assignedWorker) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+      const workerIdStr = complaint.assignedWorker._id
+        ? complaint.assignedWorker._id.toString()
+        : complaint.assignedWorker.toString();
+      if (workerIdStr !== userIdStr) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    }
+
+    const updates = await ComplaintUpdate.find({ complaint: complaint._id })
+      .populate('user', 'name role email')
+      .sort({ createdAt: 1 });
+
+    const timeline = updates.map((u) => ({
+      id: u._id.toString(),
+      type: 'STATUS_CHANGED',
+      status: u.status,
+      message: u.note || `Status changed to ${u.status}`,
+      user: u.user ? { id: u.user._id.toString(), name: u.user.name, role: u.user.role } : null,
+      createdAt: u.createdAt
+    }));
+
+    return sendSuccess(res, 200, 'Complaint timeline retrieved', { timeline });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @route   PATCH /api/complaints/:id/status
  * @desc    Update complaint status with lifecycle validation
  * @access  Private (ADMIN, FIELD_WORKER)
@@ -300,6 +374,15 @@ const updateComplaintStatus = async (req, res, next) => {
       note: note ? note.trim() : `Status updated to ${targetStatus}`
     });
 
+    // Notifications
+    await notificationService.createNotification({
+      recipient: complaint.citizen,
+      type: 'STATUS_CHANGED',
+      title: 'Complaint Status Updated',
+      message: `Your complaint #${complaint._id.toString().slice(-6)} status is now ${targetStatus}.`,
+      complaintId: complaint._id
+    });
+
     const updatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
       .populate('assignedWorker', 'name email phone')
@@ -362,6 +445,24 @@ const assignComplaint = async (req, res, next) => {
       user: req.user._id,
       status: 'ASSIGNED',
       note: note ? note.trim() : `Assigned to worker ${worker.name}`
+    });
+
+    // Notify assigned worker
+    await notificationService.createNotification({
+      recipient: worker._id,
+      type: 'COMPLAINT_ASSIGNED',
+      title: 'New Complaint Assigned',
+      message: `You have been assigned to complaint #${complaint._id.toString().slice(-6)}.`,
+      complaintId: complaint._id
+    });
+
+    // Notify citizen
+    await notificationService.createNotification({
+      recipient: complaint.citizen,
+      type: 'COMPLAINT_ASSIGNED',
+      title: 'Field Worker Assigned',
+      message: `Field worker ${worker.name} assigned to your complaint #${complaint._id.toString().slice(-6)}.`,
+      complaintId: complaint._id
     });
 
     const updatedComplaint = await Complaint.findById(complaint._id)
@@ -454,6 +555,15 @@ const analyzeComplaint = async (req, res, next) => {
     };
 
     await complaint.save();
+
+    // Notify citizen owner
+    await notificationService.createNotification({
+      recipient: complaint.citizen,
+      type: 'COMPLAINT_ANALYZED',
+      title: 'AI Analysis Completed',
+      message: `AI classified complaint as ${aiOutput.category} (${aiOutput.severity} severity).`,
+      complaintId: complaint._id
+    });
 
     const updatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
@@ -742,6 +852,15 @@ const submitResolution = async (req, res, next) => {
       note: `Resolution evidence submitted: ${note.trim()}`
     });
 
+    // Notify citizen owner
+    await notificationService.createNotification({
+      recipient: complaint.citizen,
+      type: 'RESOLUTION_SUBMITTED',
+      title: 'Resolution Evidence Submitted',
+      message: `Resolution evidence submitted for your complaint #${complaint._id.toString().slice(-6)}. Please verify.`,
+      complaintId: complaint._id
+    });
+
     const updatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
       .populate('assignedWorker', 'name email phone')
@@ -892,6 +1011,26 @@ const verifyResolution = async (req, res, next) => {
       note: note && note.trim() !== '' ? note.trim() : defaultNote
     });
 
+    // Notify citizen & assigned worker
+    const notifType = approved ? 'RESOLUTION_VERIFIED' : 'COMPLAINT_REOPENED';
+    await notificationService.createNotification({
+      recipient: complaint.citizen,
+      type: notifType,
+      title: approved ? 'Resolution Verified' : 'Complaint Reopened',
+      message: approved ? 'Resolution approved.' : 'Resolution rejected. Complaint reopened.',
+      complaintId: complaint._id
+    });
+
+    if (complaint.assignedWorker) {
+      await notificationService.createNotification({
+        recipient: complaint.assignedWorker,
+        type: notifType,
+        title: approved ? 'Resolution Approved' : 'Resolution Rejected',
+        message: approved ? 'Citizen approved resolution.' : 'Citizen rejected resolution. Complaint reopened.',
+        complaintId: complaint._id
+      });
+    }
+
     const updatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
       .populate('assignedWorker', 'name email phone')
@@ -951,6 +1090,25 @@ const closeComplaint = async (req, res, next) => {
       note: note && note.trim() !== '' ? note.trim() : 'Complaint closed by admin'
     });
 
+    // Notify citizen & assigned worker
+    await notificationService.createNotification({
+      recipient: complaint.citizen,
+      type: 'COMPLAINT_CLOSED',
+      title: 'Complaint Closed',
+      message: `Complaint #${complaint._id.toString().slice(-6)} has been officially closed.`,
+      complaintId: complaint._id
+    });
+
+    if (complaint.assignedWorker) {
+      await notificationService.createNotification({
+        recipient: complaint.assignedWorker,
+        type: 'COMPLAINT_CLOSED',
+        title: 'Complaint Closed',
+        message: `Complaint #${complaint._id.toString().slice(-6)} has been closed.`,
+        complaintId: complaint._id
+      });
+    }
+
     const updatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
       .populate('assignedWorker', 'name email phone')
@@ -969,6 +1127,7 @@ module.exports = {
   createComplaint,
   getComplaints,
   getComplaintById,
+  getComplaintTimeline,
   updateComplaintStatus,
   assignComplaint,
   analyzeComplaint,
@@ -980,4 +1139,5 @@ module.exports = {
   verifyResolution,
   closeComplaint
 };
+
 

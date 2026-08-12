@@ -3,6 +3,7 @@ const {
   createComplaint,
   getComplaints,
   getComplaintById,
+  getComplaintTimeline,
   updateComplaintStatus,
   assignComplaint,
   analyzeComplaint,
@@ -38,6 +39,13 @@ router.get('/', authenticate, getComplaints);
  * @access  Private
  */
 router.get('/:id', authenticate, getComplaintById);
+
+/**
+ * @route   GET /api/complaints/:id/timeline
+ * @desc    Get chronological timeline events for a complaint
+ * @access  Private
+ */
+router.get('/:id/timeline', authenticate, getComplaintTimeline);
 
 /**
  * @route   GET /api/complaints/:id/sla
