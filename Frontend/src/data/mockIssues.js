@@ -8,6 +8,7 @@ export const mockIssues = [
     ward: "District 6",
     priority: "High",
     status: "In Progress",
+    reportedBy: "citizen-demo",
     image: "https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&w=800&q=80",
     createdAt: "2026-08-10T08:30:00.000Z",
     updatedAt: "2026-08-11T14:15:00.000Z"
@@ -21,6 +22,7 @@ export const mockIssues = [
     ward: "District 3",
     priority: "Medium",
     status: "Submitted",
+    reportedBy: "citizen-demo",
     image: "https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?auto=format&fit=crop&w=800&q=80",
     createdAt: "2026-08-12T06:15:00.000Z",
     updatedAt: "2026-08-12T06:15:00.000Z"
@@ -34,6 +36,7 @@ export const mockIssues = [
     ward: "District 9",
     priority: "Low",
     status: "Submitted",
+    reportedBy: "citizen-demo",
     image: "https://images.unsplash.com/photo-1509099652299-fd7c17242c4c?auto=format&fit=crop&w=800&q=80",
     createdAt: "2026-08-11T20:45:00.000Z",
     updatedAt: "2026-08-11T20:45:00.000Z"
@@ -47,6 +50,7 @@ export const mockIssues = [
     ward: "District 5",
     priority: "High",
     status: "Resolved",
+    reportedBy: "anonymous",
     image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80",
     createdAt: "2026-08-05T09:00:00.000Z",
     updatedAt: "2026-08-08T16:30:00.000Z"
@@ -60,6 +64,7 @@ export const mockIssues = [
     ward: "District 3",
     priority: "Medium",
     status: "In Progress",
+    reportedBy: "citizen-demo",
     image: "https://images.unsplash.com/photo-1542060748-10c28b629f6f?auto=format&fit=crop&w=800&q=80",
     createdAt: "2026-08-09T11:20:00.000Z",
     updatedAt: "2026-08-10T10:00:00.000Z"
@@ -73,6 +78,7 @@ export const mockIssues = [
     ward: "District 8",
     priority: "High",
     status: "In Progress",
+    reportedBy: "anonymous",
     image: "https://images.unsplash.com/photo-1599740831464-59cb4a52a36b?auto=format&fit=crop&w=800&q=80",
     createdAt: "2026-08-08T15:10:00.000Z",
     updatedAt: "2026-08-10T09:00:00.000Z"
@@ -86,6 +92,7 @@ export const mockIssues = [
     ward: "District 4",
     priority: "Low",
     status: "Resolved",
+    reportedBy: "citizen-demo",
     image: "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=800&q=80",
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-04T12:00:00.000Z"

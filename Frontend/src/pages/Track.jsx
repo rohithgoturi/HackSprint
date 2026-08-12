@@ -28,7 +28,7 @@ const trackingMarkerIcon = L.divIcon({
 });
 
 const Track = () => {
-  const { issues, updateCitizenFeedback } = useCivic();
+  const { issues, updateCitizenFeedback, currentUser } = useCivic();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -43,6 +43,7 @@ const Track = () => {
 
   // Find issue by targetId
   const currentIssue = targetId ? issues.find(i => i.id.toUpperCase() === targetId.toUpperCase()) : null;
+  const isOwnReport = currentUser && currentIssue && (currentIssue.reportedBy === currentUser.id || (currentUser.id === 'citizen-demo' && currentIssue.reportedBy === 'citizen-demo'));
 
   // Handle Search submit in State 1
   const handleSearchSubmit = (e) => {
@@ -239,6 +240,11 @@ const Track = () => {
 
         {/* Identification pills */}
         <div className="flex flex-wrap items-center gap-2">
+          {isOwnReport && (
+            <div className="bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs px-2.5 py-1 rounded font-mono">
+              YOUR REPORT
+            </div>
+          )}
           <div className="bg-slate-100 text-civic-navy font-mono text-xs font-bold px-3 py-1.5 rounded border border-slate-200">
             {currentIssue.id}
           </div>

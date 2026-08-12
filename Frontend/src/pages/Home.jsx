@@ -240,13 +240,17 @@ const Home = () => {
   // Filter 3 map preview issues to display in sidebar list
   const nearbyIssues = issues.slice(0, 3);
 
+  const activeIssueCount = issues.length;
+  const highPriorityCount = issues.filter(i => (i.priority === 'High' || i.priority === 'Critical') && i.status !== 'Resolved').length;
+  const mediumPriorityCount = issues.filter(i => i.priority === 'Medium' && i.status !== 'Resolved').length;
+
   return (
-    <div className="space-y-16">
+    <div className="space-y-16 sm:space-y-24 text-left font-sans">
       
-      {/* 2. HERO SECTION */}
-      <section className="py-6 border-b border-civic-border text-left">
+      {/* 1. HERO SECTION */}
+      <section className="pt-4 sm:pt-8 pb-4">
         <Container>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             
             {/* Left Side Content */}
             <div className="space-y-6">
@@ -283,21 +287,21 @@ const Home = () => {
                 className="absolute inset-0 w-full h-full object-cover object-center"
               />
 
-              {/* Stats overlay box (4 Issues Nearby) */}
+              {/* Stats overlay box */}
               <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-xs border border-civic-border rounded-lg p-3.5 shadow-md z-10 w-44 text-left font-sans">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
-                  <span className="text-[11px] font-bold text-civic-navy uppercase tracking-wider">Nearby Issues</span>
+                  <span className="text-[11px] font-bold text-civic-navy uppercase tracking-wider">Active Issues</span>
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                 </div>
-                <div className="text-2xl font-extrabold text-civic-navy">4</div>
+                <div className="text-2xl font-extrabold text-civic-navy">{activeIssueCount}</div>
                 <div className="text-[10px] text-civic-muted mt-1 space-y-0.5">
                   <div className="flex justify-between">
                     <span>High Priority</span>
-                    <span className="font-semibold text-red-600">2</span>
+                    <span className="font-semibold text-red-600">{highPriorityCount}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Medium Priority</span>
-                    <span className="font-semibold text-amber-600">2</span>
+                    <span className="font-semibold text-amber-600">{mediumPriorityCount}</span>
                   </div>
                 </div>
               </div>
