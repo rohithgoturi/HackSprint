@@ -2,9 +2,11 @@ const mongoose = require('mongoose');
 const Complaint = require('../models/Complaint');
 const ComplaintUpdate = require('../models/ComplaintUpdate');
 const User = require('../models/User');
+const Department = require('../models/Department');
 const geminiService = require('../services/geminiService');
 const departmentService = require('../services/departmentService');
 const priorityService = require('../services/priorityService');
+const slaService = require('../services/slaService');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 // Allowed status lifecycle transitions
@@ -29,6 +31,8 @@ const VALID_STATUSES = [
   'CLOSED',
   'REOPENED'
 ];
+
+const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 /**
  * @route   POST /api/complaints
@@ -106,7 +110,6 @@ const getComplaints = async (req, res, next) => {
     } else if (role === 'FIELD_WORKER') {
       filter.assignedWorker = _id;
     }
-    // ADMIN has no scope restriction
 
     // Optional query parameters filter
     if (req.query.status && VALID_STATUSES.includes(req.query.status.toUpperCase())) {
@@ -117,7 +120,7 @@ const getComplaints = async (req, res, next) => {
     }
     if (
       req.query.priority &&
-      ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(req.query.priority.toUpperCase())
+      VALID_PRIORITIES.includes(req.query.priority.toUpperCase())
     ) {
       filter.priority = req.query.priority.toUpperCase();
     }
@@ -127,6 +130,17 @@ const getComplaints = async (req, res, next) => {
       .populate('assignedWorker', 'name email phone')
       .populate('department', 'name code category')
       .sort({ createdAt: -1 });
+
+    // Dynamically evaluate SLA status for fetched complaints
+    for (const c of complaints) {
+      if (c.sla && c.sla.deadline) {
+        const oldStatus = c.sla.status;
+        slaService.evaluateSlaStatus(c);
+        if (c.sla.status !== oldStatus) {
+          await c.save();
+        }
+      }
+    }
 
     return sendSuccess(res, 200, 'Complaints retrieved successfully', complaints);
   } catch (error) {
@@ -176,6 +190,15 @@ const getComplaintById = async (req, res, next) => {
         : complaint.assignedWorker.toString();
       if (workerIdStr !== userIdStr) {
         return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    }
+
+    // Dynamically evaluate SLA status
+    if (complaint.sla && complaint.sla.deadline) {
+      const oldStatus = complaint.sla.status;
+      slaService.evaluateSlaStatus(complaint);
+      if (complaint.sla.status !== oldStatus) {
+        await complaint.save();
       }
     }
 
@@ -249,16 +272,23 @@ const updateComplaintStatus = async (req, res, next) => {
       }
     }
 
-    // Enforce workflow transition logic for Admin (must be valid status transition unless admin correction)
+    // Enforce workflow transition logic for Admin
     if (role === 'ADMIN') {
       if (complaint.status === targetStatus) {
         return sendError(res, 400, `Complaint is already in status ${targetStatus}`);
       }
-      // Note: Admin has controlled ability to correct workflow state when necessary.
     }
 
     // Update complaint status
     complaint.status = targetStatus;
+
+    // Handle SLA completion if status becomes VERIFIED or CLOSED
+    if (targetStatus === 'VERIFIED' || targetStatus === 'CLOSED') {
+      if (complaint.sla && complaint.sla.deadline) {
+        slaService.evaluateSlaStatus(complaint);
+      }
+    }
+
     await complaint.save();
 
     // Create history update record
@@ -349,7 +379,7 @@ const assignComplaint = async (req, res, next) => {
 
 /**
  * @route   POST /api/complaints/:id/analyze
- * @desc    Analyze complaint using Gemini AI, map department, calculate priority
+ * @desc    Analyze complaint using Gemini AI, map department, calculate priority & SLA
  * @access  Private (CITIZEN, ADMIN)
  */
 const analyzeComplaint = async (req, res, next) => {
@@ -394,18 +424,25 @@ const analyzeComplaint = async (req, res, next) => {
     const department = await departmentService.getDepartmentForCategory(aiOutput.category);
 
     // Calculate priority using priority engine
-    const priority = priorityService.calculatePriority({
+    const priorityResult = priorityService.calculatePriority({
       severity: aiOutput.severity,
       category: aiOutput.category,
       location: complaint.location
     });
 
+    // Calculate SLA target hours and deadline from complaint creation date
+    const slaResult = slaService.calculateSlaDeadline(priorityResult.priority, complaint.createdAt);
+
     // Update complaint record
     complaint.issue = aiOutput.issue;
     complaint.category = aiOutput.category;
     complaint.severity = aiOutput.severity;
-    complaint.priority = priority;
+    complaint.priority = priorityResult.priority;
+    complaint.priorityExplanation = priorityResult.explanation;
+    complaint.prioritySource = priorityResult.prioritySource;
     complaint.department = department._id;
+    complaint.departmentSource = 'RULE_BASED';
+    complaint.sla = slaResult;
     complaint.aiAnalysis = {
       issue: aiOutput.issue,
       category: aiOutput.category,
@@ -430,12 +467,200 @@ const analyzeComplaint = async (req, res, next) => {
   }
 };
 
+/**
+ * @route   PATCH /api/complaints/:id/priority
+ * @desc    Admin override of complaint priority and SLA recalculation
+ * @access  Private (ADMIN)
+ */
+const overridePriority = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { priority, reason } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    if (!priority || !VALID_PRIORITIES.includes(priority.toUpperCase())) {
+      return sendError(res, 400, 'Valid priority level is required (LOW, MEDIUM, HIGH, CRITICAL)');
+    }
+
+    const targetPriority = priority.toUpperCase();
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Update priority and source
+    complaint.priority = targetPriority;
+    complaint.prioritySource = 'ADMIN_OVERRIDE';
+
+    const overrideReasonStr = reason && reason.trim() !== ''
+      ? `Admin override: ${reason.trim()}`
+      : 'Admin priority override';
+    
+    if (!complaint.priorityExplanation) {
+      complaint.priorityExplanation = [];
+    }
+    complaint.priorityExplanation.push(overrideReasonStr);
+
+    // Recalculate SLA based on new priority target from original creation date
+    const newSla = slaService.calculateSlaDeadline(targetPriority, complaint.createdAt);
+    complaint.sla = newSla;
+
+    await complaint.save();
+
+    // Create history update record
+    const updateRecord = await ComplaintUpdate.create({
+      complaint: complaint._id,
+      user: req.user._id,
+      status: complaint.status,
+      note: `Priority overridden to ${targetPriority}. Reason: ${reason || 'Admin action'}`
+    });
+
+    const updatedComplaint = await Complaint.findById(complaint._id)
+      .populate('citizen', 'name email phone')
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
+
+    return sendSuccess(res, 200, 'Priority overridden successfully', {
+      complaint: updatedComplaint.toJSON(),
+      updateRecord: updateRecord.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   PATCH /api/complaints/:id/department
+ * @desc    Admin override of department routing
+ * @access  Private (ADMIN)
+ */
+const overrideDepartment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { departmentId, category, reason } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    let targetDepartment = null;
+
+    if (departmentId && mongoose.Types.ObjectId.isValid(departmentId)) {
+      targetDepartment = await Department.findById(departmentId);
+      if (!targetDepartment) {
+        return sendError(res, 404, 'Target department not found');
+      }
+    } else if (category && typeof category === 'string') {
+      targetDepartment = await departmentService.getDepartmentForCategory(category);
+    } else {
+      return sendError(res, 400, 'Valid departmentId or category string is required');
+    }
+
+    complaint.department = targetDepartment._id;
+    complaint.departmentSource = 'ADMIN_OVERRIDE';
+    await complaint.save();
+
+    // Create audit history record
+    const updateRecord = await ComplaintUpdate.create({
+      complaint: complaint._id,
+      user: req.user._id,
+      status: complaint.status,
+      note: `Department updated to ${targetDepartment.name}. Reason: ${reason || 'Admin action'}`
+    });
+
+    const updatedComplaint = await Complaint.findById(complaint._id)
+      .populate('citizen', 'name email phone')
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
+
+    return sendSuccess(res, 200, 'Department overridden successfully', {
+      complaint: updatedComplaint.toJSON(),
+      updateRecord: updateRecord.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   GET /api/complaints/:id/sla
+ * @desc    Get SLA metric status and remaining time for a complaint
+ * @access  Private
+ */
+const getComplaintSla = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Role authorization check
+    const { role, _id } = req.user;
+    const userIdStr = _id.toString();
+
+    if (role === 'CITIZEN') {
+      const citizenIdStr = complaint.citizen._id
+        ? complaint.citizen._id.toString()
+        : complaint.citizen.toString();
+      if (citizenIdStr !== userIdStr) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    } else if (role === 'FIELD_WORKER') {
+      if (!complaint.assignedWorker) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+      const workerIdStr = complaint.assignedWorker._id
+        ? complaint.assignedWorker._id.toString()
+        : complaint.assignedWorker.toString();
+      if (workerIdStr !== userIdStr) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    }
+
+    // Evaluate current SLA status and update if changed
+    if (complaint.sla && complaint.sla.deadline) {
+      const oldStatus = complaint.sla.status;
+      slaService.evaluateSlaStatus(complaint);
+      if (complaint.sla.status !== oldStatus) {
+        await complaint.save();
+      }
+    }
+
+    const slaDetails = slaService.getSlaDetails(complaint);
+
+    if (!slaDetails) {
+      return sendError(res, 400, 'SLA has not been initialized for this complaint');
+    }
+
+    return sendSuccess(res, 200, 'SLA information retrieved', slaDetails);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createComplaint,
   getComplaints,
   getComplaintById,
   updateComplaintStatus,
   assignComplaint,
-  analyzeComplaint
+  analyzeComplaint,
+  overridePriority,
+  overrideDepartment,
+  getComplaintSla
 };
-

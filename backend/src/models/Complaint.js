@@ -91,6 +91,31 @@ const complaintSchema = new mongoose.Schema(
       departmentRecommendation: { type: String, default: null },
       reasoning: { type: String, default: null },
       analyzedAt: { type: Date, default: null }
+    },
+    priorityExplanation: {
+      type: [String],
+      default: []
+    },
+    prioritySource: {
+      type: String,
+      enum: ['AI_SEVERITY', 'RULE_BASED', 'ADMIN_OVERRIDE'],
+      default: null
+    },
+    departmentSource: {
+      type: String,
+      enum: ['RULE_BASED', 'ADMIN_OVERRIDE'],
+      default: null
+    },
+    sla: {
+      targetHours: { type: Number, default: null },
+      deadline: { type: Date, default: null },
+      status: {
+        type: String,
+        enum: ['ON_TRACK', 'BREACHED', 'COMPLETED'],
+        default: null
+      },
+      completedAt: { type: Date, default: null },
+      wasBreachedOnCompletion: { type: Boolean, default: false }
     }
   },
   {

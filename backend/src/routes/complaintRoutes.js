@@ -5,7 +5,10 @@ const {
   getComplaintById,
   updateComplaintStatus,
   assignComplaint,
-  analyzeComplaint
+  analyzeComplaint,
+  overridePriority,
+  overrideDepartment,
+  getComplaintSla
 } = require('../controllers/complaintController');
 const { authenticate, authorizeRoles } = require('../middleware/authMiddleware');
 
@@ -33,11 +36,32 @@ router.get('/', authenticate, getComplaints);
 router.get('/:id', authenticate, getComplaintById);
 
 /**
+ * @route   GET /api/complaints/:id/sla
+ * @desc    Get SLA metric status and remaining time
+ * @access  Private
+ */
+router.get('/:id/sla', authenticate, getComplaintSla);
+
+/**
  * @route   POST /api/complaints/:id/analyze
  * @desc    Analyze complaint using Gemini AI
  * @access  Private (CITIZEN, ADMIN)
  */
 router.post('/:id/analyze', authenticate, authorizeRoles('CITIZEN', 'ADMIN'), analyzeComplaint);
+
+/**
+ * @route   PATCH /api/complaints/:id/priority
+ * @desc    Admin override of priority and SLA recalculation
+ * @access  Private (ADMIN)
+ */
+router.patch('/:id/priority', authenticate, authorizeRoles('ADMIN'), overridePriority);
+
+/**
+ * @route   PATCH /api/complaints/:id/department
+ * @desc    Admin override of department routing
+ * @access  Private (ADMIN)
+ */
+router.patch('/:id/department', authenticate, authorizeRoles('ADMIN'), overrideDepartment);
 
 /**
  * @route   PATCH /api/complaints/:id/status
