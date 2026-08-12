@@ -189,38 +189,37 @@ const Report = () => {
   };
 
   // Submit Report
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
-      // Focus first error if necessary
       return;
     }
 
     setIsSubmitting(true);
 
-    // Simulate submission delay for realistic civic database storage
-    setTimeout(() => {
-      // We will assign a stock photo for mock data in localStorage to keep payloads light
-      const mockImageLink = photoPreview ? 'https://images.unsplash.com/photo-1599740831464-59cb4a52a36b?auto=format&fit=crop&w=800&q=80' : 'https://images.unsplash.com/photo-1542060748-10c28b629f6f?auto=format&fit=crop&w=800&q=80';
+    try {
+      const mockImageLink = photoPreview ? 'https://images.unsplash.com/photo-1599740831464-59cb4a52a36b?auto=format&fit=crop&w=800&q=80' : null;
       
-      const newIssue = reportIssue({
+      const newIssue = await reportIssue({
         title: `${category} reported at ${address || 'Pinned Location'}`,
         category,
-        description,
+        description: description + (additionalDetails ? ` Details: ${additionalDetails}` : ''),
         ward,
         image: mockImageLink,
         location: {
           lat: lat || defaultCenter[0],
           lng: lng || defaultCenter[1]
-        },
-        additionalDetails
+        }
       });
 
-      setNewIssueId(newIssue.id);
-      setIsSubmitting(false);
+      setNewIssueId(newIssue.id || newIssue._id);
       setIsSubmitted(true);
-    }, 1200);
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, submit: err.message || 'Failed to submit complaint to backend' }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Copy ID and trigger toast

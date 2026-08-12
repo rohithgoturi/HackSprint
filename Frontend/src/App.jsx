@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Analyze from './pages/Analyze';
 import MyReports from './pages/MyReports';
+import WorkerDashboard from './pages/WorkerDashboard';
 import NotFound from './pages/NotFound';
 
 // Admin Sub-pages
@@ -39,6 +40,14 @@ function App() {
           element={
             <ProtectedRoute requiredRole="citizen">
               <MyReports />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="worker" 
+          element={
+            <ProtectedRoute requiredRole="worker">
+              <WorkerDashboard />
             </ProtectedRoute>
           } 
         />

@@ -1,21 +1,27 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCivic } from '../context/CivicContext';
 import Container from '../components/Container';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
-import { FileText, PlusCircle, ChevronRight, MapPin, Clock, FileX } from 'lucide-react';
+import { FileText, PlusCircle, ChevronRight, MapPin, Clock, FileX, Loader2, AlertCircle } from 'lucide-react';
 
 const MyReports = () => {
-  const { issues, currentUser } = useCivic();
+  const { issues, currentUser, fetchComplaints, loading, error } = useCivic();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [fetchComplaints]);
 
   // Filter reports belonging to current user
   const userReports = issues.filter(issue => {
     if (!currentUser) return false;
-    if (issue.reportedBy === currentUser.id) return true;
-    if (currentUser.id === 'citizen-demo' && (issue.reportedBy === 'citizen-demo' || !issue.reportedBy)) return true;
-    return false;
+    if (currentUser.role === 'admin') return true;
+    const cid = currentUser._id || currentUser.id;
+    if (issue.reportedBy === cid) return true;
+    if (issue.citizenInfo && (issue.citizenInfo._id === cid || issue.citizenInfo.id === cid)) return true;
+    return true; // Show fetched complaints returned by scoped GET /api/complaints endpoint
   });
 
   const formatDate = (dateStr) => {
@@ -51,10 +57,22 @@ const MyReports = () => {
         </Link>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-xs text-red-700 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <div className="bg-white border border-civic-border rounded-xl shadow-civic-subtle overflow-hidden">
         
-        {userReports.length === 0 ? (
+        {loading ? (
+          <div className="p-12 text-center text-xs text-civic-muted flex items-center justify-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin text-civic-action" />
+            Loading your reports from civic server...
+          </div>
+        ) : userReports.length === 0 ? (
           /* EMPTY STATE */
           <div className="p-12 text-center space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center border border-slate-200">
@@ -96,16 +114,16 @@ const MyReports = () => {
                       className="hover:bg-blue-50/40 transition-colors cursor-pointer"
                     >
                       <td className="px-6 py-4 font-mono font-bold text-civic-action whitespace-nowrap">
-                        {issue.id}
+                        {issue.code || issue.displayId || issue.id}
                       </td>
-                      <td className="px-6 py-4 font-bold text-[#10213F] max-w-xs">
-                        <div className="truncate">{issue.title}</div>
-                        <div className="text-[11px] text-civic-muted font-normal truncate mt-0.5">{issue.category}</div>
+                      <td className="px-6 py-4 max-w-xs">
+                        <div className="font-bold text-[#10213F] truncate">{issue.title}</div>
+                        <div className="text-[11px] text-civic-muted truncate mt-0.5">{issue.description}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-semibold text-xs">{issue.ward}</div>
-                        <div className="text-[10px] text-civic-muted truncate max-w-[140px]">
-                          {issue.location?.address || issue.locationText || 'Pinned Coordinates'}
+                        <div className="flex items-center gap-1 text-slate-700 font-medium">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                          <span>{issue.ward || 'Central Ward'}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -114,19 +132,16 @@ const MyReports = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <StatusBadge status={issue.status} />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap font-mono text-civic-muted text-[11px]">
-                        {formatDate(issue.createdAt)}
+                      <td className="px-6 py-4 whitespace-nowrap text-civic-muted text-[11px]">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          {formatDate(issue.createdAt)}
+                        </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/track?id=${issue.id}`);
-                          }}
-                          className="bg-civic-action hover:bg-civic-action-hover text-white text-[11px] font-bold px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          Track <ChevronRight className="w-3 h-3" />
-                        </button>
+                      <td className="px-6 py-4 whitespace-nowrap text-right font-medium">
+                        <span className="text-civic-action hover:underline inline-flex items-center gap-0.5 font-semibold text-[11px]">
+                          Track <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -134,35 +149,29 @@ const MyReports = () => {
               </table>
             </div>
 
-            {/* Mobile Stacked Cards */}
-            <div className="md:hidden p-4 space-y-3">
+            {/* Mobile Card List View */}
+            <div className="md:hidden divide-y divide-civic-border">
               {userReports.map((issue) => (
                 <div 
                   key={issue.id}
                   onClick={() => navigate(`/track?id=${issue.id}`)}
-                  className="bg-slate-50 border border-civic-border rounded-lg p-4 space-y-3 active:bg-blue-50 transition-colors"
+                  className="p-4 space-y-3 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-mono font-bold text-civic-action text-xs">{issue.id}</span>
-                      <h4 className="font-bold text-xs text-[#10213F] mt-0.5">{issue.title}</h4>
-                    </div>
+                    <span className="font-mono text-xs font-bold text-civic-action">
+                      {issue.code || issue.displayId || issue.id}
+                    </span>
                     <StatusBadge status={issue.status} />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-civic-muted">
-                    <span className="font-bold bg-white border border-slate-200 px-2 py-0.5 rounded">{issue.ward}</span>
-                    <span>&bull;</span>
-                    <span>{issue.category}</span>
-                    <span>&bull;</span>
-                    <PriorityBadge priority={issue.priority} />
+                  <div>
+                    <h4 className="font-bold text-sm text-[#10213F]">{issue.title}</h4>
+                    <p className="text-xs text-civic-muted line-clamp-2 mt-1">{issue.description}</p>
                   </div>
 
-                  <div className="flex justify-between items-center pt-1 text-[11px] border-t border-slate-200/60">
-                    <span className="text-slate-400 font-mono">{formatDate(issue.createdAt)}</span>
-                    <span className="text-civic-action font-bold inline-flex items-center gap-0.5">
-                      Track Status <ChevronRight className="w-3.5 h-3.5" />
-                    </span>
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] text-civic-muted">
+                    <PriorityBadge priority={issue.priority} />
+                    <span>{formatDate(issue.createdAt)}</span>
                   </div>
                 </div>
               ))}

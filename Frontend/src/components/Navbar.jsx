@@ -1,13 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useCivic } from '../context/CivicContext';
-import { Menu, X, Landmark, User, LogOut, ShieldAlert, FileText } from 'lucide-react';
+import { Menu, X, Landmark, User, LogOut, ShieldAlert, FileText, Bell } from 'lucide-react';
+import { notificationAPI } from '../services/api';
 import Container from './Container';
 
 const Navbar = () => {
-  const { currentUser, logoutUser, isAuthenticated, isAdmin, isCitizen } = useCivic();
+  const { currentUser, logoutUser, isAuthenticated, isAdmin, isCitizen, isWorker, notificationsList, fetchNotifications } = useCivic();
   const [isOpen, setIsOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchNotifications();
+    }
+  }, [isAuthenticated, fetchNotifications]);
+
+  const unreadCount = (notificationsList || []).filter(n => !n.isRead).length;
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationAPI.markAllRead();
+      fetchNotifications();
+    } catch (err) {
+      console.warn('Mark all read error:', err.message);
+    }
+  };
 
   const handleLogout = () => {
     logoutUser();
@@ -28,6 +47,12 @@ const Navbar = () => {
       { name: 'Live Map', path: '/map' },
       { name: 'Track Issue', path: '/track' },
       { name: 'My Reports', path: '/reports' },
+    ];
+  } else if (isAuthenticated && isWorker) {
+    navLinks = [
+      { name: 'Worker Dashboard', path: '/worker' },
+      { name: 'Live Map', path: '/map' },
+      { name: 'Track Issue', path: '/track' },
     ];
   } else if (isAuthenticated && isAdmin) {
     navLinks = [
@@ -99,6 +124,62 @@ const Navbar = () => {
                   }`}>
                     {currentUser?.role || 'user'}
                   </span>
+                </div>
+
+                {/* Notifications Bell Icon */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setShowNotifications(!showNotifications);
+                      if (!showNotifications && unreadCount > 0) handleMarkAllRead();
+                    }}
+                    className="p-2 rounded-lg text-slate-500 hover:text-civic-navy hover:bg-slate-100 transition-colors relative cursor-pointer"
+                    title="Notifications"
+                  >
+                    <Bell className="w-4.5 h-4.5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 w-4 h-4 bg-red-600 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {showNotifications && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white border border-civic-border rounded-xl shadow-xl z-50 text-left overflow-hidden">
+                      <div className="p-3 bg-slate-50 border-b border-civic-border flex justify-between items-center">
+                        <span className="text-xs font-extrabold text-[#10213F] uppercase tracking-wider">
+                          Notifications ({notificationsList.length})
+                        </span>
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={handleMarkAllRead}
+                            className="text-[10px] text-civic-action hover:underline font-bold"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                        {notificationsList.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-civic-muted">
+                            No notifications yet.
+                          </div>
+                        ) : (
+                          notificationsList.map((n) => (
+                            <div key={n._id || n.id} className={`p-3 text-xs space-y-1 ${n.isRead ? 'bg-white' : 'bg-blue-50/40'}`}>
+                              <div className="font-bold text-[#10213F] flex items-center justify-between">
+                                <span>{n.title}</span>
+                                <span className="text-[9px] text-slate-400 font-normal">
+                                  {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="text-civic-muted text-[11px] leading-relaxed">{n.message}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button

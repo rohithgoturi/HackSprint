@@ -1,16 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCivic } from '../context/CivicContext';
 import Container from '../components/Container';
 import SectionHeading from '../components/SectionHeading';
 import IssueCard from '../components/IssueCard';
 import Button from '../components/Button';
-import { User, FileText, Settings, ShieldAlert, LogIn, Plus } from 'lucide-react';
+import { User, LogIn, Plus, ShieldAlert, Loader2, AlertCircle } from 'lucide-react';
 
 const Dashboard = () => {
-  const { currentUser, issues, authStatus } = useCivic();
+  const { currentUser, issues, authStatus, fetchCitizenDashboard, citizenStats, loading, error } = useCivic();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('all');
+
+  useEffect(() => {
+    if (authStatus) {
+      fetchCitizenDashboard();
+    }
+  }, [authStatus, fetchCitizenDashboard]);
 
   if (!authStatus) {
     return (
@@ -33,17 +39,25 @@ const Dashboard = () => {
     );
   }
 
-  // Filter issues belonging to the user's ward (District 3 is default for resident)
-  const myIssues = issues.filter(issue => issue.ward === currentUser.ward);
-  
+  // Filter issues belonging to current citizen
+  const myIssues = issues.filter(issue => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin') return true;
+    const cid = currentUser._id || currentUser.id;
+    if (issue.reportedBy === cid) return true;
+    if (issue.citizenInfo && (issue.citizenInfo._id === cid || issue.citizenInfo.id === cid)) return true;
+    return false;
+  });
+
   const filteredMyIssues = myIssues.filter(issue => {
-    if (activeTab === 'active') return issue.status !== 'Resolved';
-    if (activeTab === 'resolved') return issue.status === 'Resolved';
+    if (activeTab === 'active') return issue.status !== 'RESOLVED' && issue.status !== 'CLOSED' && issue.status !== 'VERIFIED';
+    if (activeTab === 'resolved') return issue.status === 'RESOLVED' || issue.status === 'CLOSED' || issue.status === 'VERIFIED';
     return true;
   });
 
-  const activeCount = myIssues.filter(i => i.status !== 'Resolved').length;
-  const resolvedCount = myIssues.filter(i => i.status === 'Resolved').length;
+  const totalCount = citizenStats?.overview?.totalComplaints ?? myIssues.length;
+  const activeCount = citizenStats?.overview?.pendingCount ?? myIssues.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED' && i.status !== 'VERIFIED').length;
+  const resolvedCount = citizenStats?.overview?.resolvedCount ?? myIssues.filter(i => i.status === 'RESOLVED' || i.status === 'CLOSED' || i.status === 'VERIFIED').length;
 
   return (
     <Container className="text-left space-y-8">
@@ -56,7 +70,7 @@ const Dashboard = () => {
           <div>
             <h2 className="text-lg font-bold text-civic-navy">{currentUser.name}</h2>
             <p className="text-xs text-civic-muted">
-              Resident Account &bull; Registered in <strong className="text-civic-navy font-semibold">{currentUser.ward}</strong>
+              Resident Account &bull; Registered in <strong className="text-civic-navy font-semibold">{currentUser.ward || 'Central Ward'}</strong>
             </p>
           </div>
         </div>
@@ -76,12 +90,20 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Error state if any */}
+      {error && (
+        <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-xs text-red-700 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <div className="bg-white border border-civic-border rounded-lg p-5 shadow-civic-subtle">
           <span className="text-[10px] font-bold text-civic-muted uppercase tracking-wider">My Submissions</span>
-          <div className="text-3xl font-extrabold text-civic-navy mt-1">{myIssues.length}</div>
-          <p className="text-xs text-civic-muted mt-1">Total logged in {currentUser.ward}</p>
+          <div className="text-3xl font-extrabold text-civic-navy mt-1">{totalCount}</div>
+          <p className="text-xs text-civic-muted mt-1">Total logged reports</p>
         </div>
 
         <div className="bg-white border border-civic-border rounded-lg p-5 shadow-civic-subtle">
@@ -132,7 +154,14 @@ const Dashboard = () => {
           }
         />
 
-        {filteredMyIssues.length === 0 ? (
+        {loading && (
+          <div className="p-8 text-center text-xs text-civic-muted flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-civic-action" />
+            Loading reports from backend...
+          </div>
+        )}
+
+        {!loading && filteredMyIssues.length === 0 ? (
           <div className="bg-white border border-civic-border rounded-lg p-10 text-center shadow-civic-subtle">
             <span className="block text-sm font-bold text-civic-navy mb-1">No reports logged in this tab</span>
             <p className="text-xs text-civic-muted mb-4 max-w-xs mx-auto">
@@ -147,13 +176,7 @@ const Dashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {filteredMyIssues.map(issue => (
-              <IssueCard 
-                key={issue.id} 
-                issue={issue}
-                onViewDetails={(selected) => {
-                  alert(`Issue History for ${selected.id}:\n${selected.title}\nStatus: ${selected.status}\nLast updated: ${new Date(selected.updatedAt).toLocaleDateString()}`);
-                }}
-              />
+              <IssueCard key={issue.id} issue={issue} />
             ))}
           </div>
         )}

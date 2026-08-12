@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { useCivic } from '../../context/CivicContext';
+import { complaintAPI } from '../../services/api';
 import { getStatusConfig, getStatusHistory, normalizeStatus } from '../../utils/statusConfig';
 import StatusBadge from '../../components/StatusBadge';
 import PriorityBadge from '../../components/PriorityBadge';
@@ -45,9 +46,57 @@ const adminMarkerIcon = L.divIcon({
 const AdminIssueDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { issues, updateAdminIssue, assignDepartment } = useCivic();
+  const { 
+    issues, updateIssueStatus, updateIssuePriority, assignDepartment, 
+    assignWorker, workersList, fetchWorkers, fetchComplaints 
+  } = useCivic();
 
-  const currentIssue = issues.find(i => i.id.toUpperCase() === (id || '').toUpperCase());
+  const [selectedWorkerId, setSelectedWorkerId] = useState('');
+
+  React.useEffect(() => {
+    fetchWorkers();
+  }, [fetchWorkers]);
+
+  const handleCloseComplaint = async () => {
+    if (!currentIssue) return;
+    try {
+      await complaintAPI.close(currentIssue.id || currentIssue._id);
+      fetchComplaints();
+      showToast('Complaint officially CLOSED.');
+    } catch (err) {
+      showToast(err.message || 'Closure failed');
+    }
+  };
+
+  const handleAssignWorker = async () => {
+    if (!currentIssue || !selectedWorkerId) {
+      showToast('Please select a field worker first', 'error');
+      return;
+    }
+    try {
+      await assignWorker(currentIssue.id || currentIssue._id, selectedWorkerId, 'Worker dispatched by municipal administrator.');
+      fetchComplaints();
+      showToast('Worker assigned successfully!');
+    } catch (err) {
+      showToast(err.message || 'Worker assignment failed');
+    }
+  };
+
+  const currentIssue = issues.find(i => 
+    (i.id && String(i.id).toUpperCase() === (id || '').toUpperCase()) ||
+    (i._id && String(i._id).toUpperCase() === (id || '').toUpperCase()) ||
+    (i.code && String(i.code).toUpperCase() === (id || '').toUpperCase())
+  );
+
+  // Sync selected worker ID when currentIssue is loaded
+  React.useEffect(() => {
+    if (currentIssue?.assignedWorker) {
+      const wId = typeof currentIssue.assignedWorker === 'object' 
+        ? (currentIssue.assignedWorker._id || currentIssue.assignedWorker.id)
+        : currentIssue.assignedWorker;
+      setSelectedWorkerId(wId || '');
+    }
+  }, [currentIssue]);
 
   // Modal & Form States
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -87,13 +136,14 @@ const AdminIssueDetail = () => {
 
   // Department change handler
   const handleDepartmentChange = (dept) => {
-    assignDepartment(currentIssue.id, dept);
+    assignDepartment(currentIssue.id || currentIssue._id, dept);
     showToast(`Department updated to ${dept}.`);
   };
 
   // Priority change handler
   const handlePriorityChange = (prio) => {
-    updateAdminIssue(currentIssue.id, { priority: prio });
+    const backendPrio = String(prio).toUpperCase();
+    updateIssuePriority(currentIssue.id || currentIssue._id, backendPrio);
     showToast(`Priority updated to ${prio}.`);
   };
 
@@ -107,18 +157,25 @@ const AdminIssueDetail = () => {
 
   // Execute Status Transition
   const handleConfirmStatusChange = () => {
-    if (targetStatus === 'Resolved') {
-      if (!resolutionNoteInput.trim() || resolutionNoteInput.trim().length < 10) {
-        setResolutionNoteError('Resolution note is required and must be at least 10 characters.');
+    if (targetStatus === 'Resolved' || targetStatus === 'RESOLVED') {
+      if (!resolutionNoteInput.trim() || resolutionNoteInput.trim().length < 5) {
+        setResolutionNoteError('Resolution note is required and must be at least 5 characters.');
         return;
       }
     }
 
-    updateAdminIssue(currentIssue.id, {
-      status: targetStatus,
-      resolutionNote: targetStatus === 'Resolved' ? resolutionNoteInput.trim() : currentIssue.resolutionNote,
-      assignedDepartment: currentIssue.assignedDepartment || currentIssue.aiAnalysis?.recommendedDepartment || 'General Civic Services'
-    });
+    const backendStatusMap = {
+      'Reported': 'REPORTED',
+      'AI Analyzed': 'UNDER_REVIEW',
+      'Under Review': 'UNDER_REVIEW',
+      'Assigned': 'ASSIGNED',
+      'In Progress': 'IN_PROGRESS',
+      'Resolved': 'RESOLVED'
+    };
+
+    const targetBackendStatus = backendStatusMap[targetStatus] || String(targetStatus).toUpperCase();
+
+    updateIssueStatus(currentIssue.id || currentIssue._id, targetBackendStatus, resolutionNoteInput.trim());
 
     setShowStatusModal(false);
     showToast(`Status updated to "${targetStatus}".`);
@@ -336,6 +393,39 @@ const AdminIssueDetail = () => {
             </div>
           </div>
 
+          {/* FIELD WORKER ASSIGNMENT CARD */}
+          <div className="bg-white border border-civic-border rounded-xl p-5 shadow-civic-subtle space-y-3">
+            <span className="text-[10px] font-bold text-civic-muted uppercase tracking-wider block flex items-center gap-1">
+              <Building2 className="w-3.5 h-3.5 text-civic-action" /> Assign Field Worker
+            </span>
+
+            <div>
+              <label htmlFor="workerSelect" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                Select Field Worker / Officer
+              </label>
+              <select
+                id="workerSelect"
+                value={selectedWorkerId}
+                onChange={(e) => setSelectedWorkerId(e.target.value)}
+                className="w-full text-xs font-bold text-[#10213F] bg-slate-50 border border-civic-border rounded-lg px-3 py-2.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-civic-action"
+              >
+                <option value="">Select Field Worker...</option>
+                {workersList.map(w => (
+                  <option key={w._id || w.id} value={w._id || w.id}>
+                    {w.name} ({w.email}) &bull; {w.department || 'Field Ops'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleAssignWorker}
+              className="w-full bg-[#10213F] hover:bg-slate-800 text-white text-xs font-bold py-2.5 px-4 rounded-lg transition-colors cursor-pointer"
+            >
+              Assign Selected Field Worker
+            </button>
+          </div>
+
           {/* PRIORITY ASSESSMENT CARD */}
           <div className="bg-white border border-civic-border rounded-xl p-5 shadow-civic-subtle space-y-3">
             <span className="text-[10px] font-bold text-civic-muted uppercase tracking-wider block flex items-center gap-1">
@@ -398,13 +488,33 @@ const AdminIssueDetail = () => {
               </button>
             )}
 
-            {normalizedStatus === 'Resolved' && (
+            {(currentIssue.status === 'VERIFIED' || normalizedStatus === 'Verified') && (
+              <button
+                onClick={handleCloseComplaint}
+                className="w-full bg-slate-900 hover:bg-black text-white text-xs font-bold py-2.5 px-4 rounded-lg transition-colors cursor-pointer shadow-xs border border-slate-700"
+              >
+                CLOSE COMPLAINT (OFFICIAL)
+              </button>
+            )}
+
+            {currentIssue.status === 'CLOSED' && (
+              <div className="bg-slate-900 text-white rounded-lg p-3 text-center space-y-1">
+                <span className="text-xs font-bold flex items-center justify-center gap-1 text-emerald-400">
+                  <ShieldCheck className="w-4 h-4" /> COMPLAINT OFFICIALLY CLOSED
+                </span>
+                <p className="text-[10px] text-slate-300 leading-tight">
+                  Lifecycle complete. Archived in municipal registry.
+                </p>
+              </div>
+            )}
+
+            {normalizedStatus === 'Resolved' && currentIssue.status !== 'VERIFIED' && currentIssue.status !== 'CLOSED' && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center space-y-1">
                 <span className="text-xs font-bold text-emerald-800 flex items-center justify-center gap-1">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" /> Issue Resolved
                 </span>
                 <p className="text-[11px] text-emerald-700 leading-tight">
-                  This report has been marked resolved and completed.
+                  This report has been marked resolved. Awaiting citizen verification.
                 </p>
               </div>
             )}

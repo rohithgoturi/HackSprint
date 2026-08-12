@@ -14,11 +14,11 @@ import {
 
 const Analyze = () => {
   const { id } = useParams();
-  const { issues, applyAiAnalysis } = useCivic();
+  const { issues, triggerAiAnalysis, applyAiAnalysis } = useCivic();
   const navigate = useNavigate();
 
   // Find issue by ID from Context/localStorage
-  const issue = issues.find(i => i.id === id);
+  const issue = issues.find(i => (i.id === id || i._id === id));
 
   // Controlled processing steps
   const initialSteps = [
@@ -36,40 +36,33 @@ const Analyze = () => {
   useEffect(() => {
     if (!issue) return;
 
-    // Check if issue was already analyzed previously (persisted in state/localStorage)
     if (issue.aiAnalysis) {
       setAnalysisResult(issue.aiAnalysis);
-      setProcessingSteps(initialSteps.map(s => ({ ...s, status: 'complete' })));
+      setProcessingSteps(initialSteps.map((s) => ({ ...s, status: 'complete' })));
       setIsProcessing(false);
       return;
     }
 
-    // Run short deterministic analysis
-    const result = analyzeIssue(issue);
-    setAnalysisResult(result);
-
-    // Sequence simulation (300ms per step, ~1.5s total)
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      if (currentStep < initialSteps.length) {
-        setProcessingSteps(prev =>
-          prev.map((step, idx) => {
-            if (idx < currentStep) return { ...step, status: 'complete' };
-            if (idx === currentStep) return { ...step, status: 'processing' };
-            return { ...step, status: 'pending' };
-          })
-        );
-        currentStep++;
-      } else {
-        clearInterval(interval);
-        setProcessingSteps(prev => prev.map(step => ({ ...step, status: 'complete' })));
+    let isMounted = true;
+    triggerAiAnalysis(issue.id || issue._id)
+      .then((updated) => {
+        if (!isMounted) return;
+        if (updated && updated.aiAnalysis) {
+          setAnalysisResult(updated.aiAnalysis);
+        }
+        setProcessingSteps((prev) => prev.map((step) => ({ ...step, status: 'complete' })));
         setIsProcessing(false);
-        // Persist analysis to Context & localStorage
-        applyAiAnalysis(issue.id, result);
-      }
-    }, 280);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.warn('[AI Analysis API Warning]:', err.message);
+        setProcessingSteps((prev) => prev.map((step) => ({ ...step, status: 'complete' })));
+        setIsProcessing(false);
+      });
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+    };
   }, [id, issue]);
 
   // Handle report not found

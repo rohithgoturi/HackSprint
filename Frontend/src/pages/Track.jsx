@@ -3,6 +3,7 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { useCivic } from '../context/CivicContext';
+import { complaintAPI } from '../services/api';
 import { getStatusConfig, getStatusHistory, normalizeStatus } from '../utils/statusConfig';
 import Container from '../components/Container';
 import Button from '../components/Button';
@@ -28,7 +29,7 @@ const trackingMarkerIcon = L.divIcon({
 });
 
 const Track = () => {
-  const { issues, updateCitizenFeedback, currentUser } = useCivic();
+  const { issues, updateCitizenFeedback, currentUser, fetchComplaints, showToast } = useCivic();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -41,9 +42,41 @@ const Track = () => {
   const [showCopyLinkToast, setShowCopyLinkToast] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
+  const handleVerifyApprove = async () => {
+    if (!currentIssue) return;
+    try {
+      await complaintAPI.verifyResolution(currentIssue.id || currentIssue._id, { approved: true, note: 'Resolution approved and verified by citizen.' });
+      fetchComplaints();
+      showToast('Complaint resolution approved & verified!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Verification failed', 'error');
+    }
+  };
+
+  const handleVerifyReject = async () => {
+    if (!currentIssue) return;
+    try {
+      await complaintAPI.verifyResolution(currentIssue.id || currentIssue._id, { approved: false, note: 'Resolution rejected by citizen. Issue still requires attention.' });
+      fetchComplaints();
+      showToast('Complaint reopened for further review.', 'info');
+    } catch (err) {
+      showToast(err.message || 'Rejection failed', 'error');
+    }
+  };
+
   // Find issue by targetId
-  const currentIssue = targetId ? issues.find(i => i.id.toUpperCase() === targetId.toUpperCase()) : null;
-  const isOwnReport = currentUser && currentIssue && (currentIssue.reportedBy === currentUser.id || (currentUser.id === 'citizen-demo' && currentIssue.reportedBy === 'citizen-demo'));
+  const currentIssue = targetId ? issues.find(i => 
+    (i.id && String(i.id).toUpperCase() === targetId.toUpperCase()) ||
+    (i._id && String(i._id).toUpperCase() === targetId.toUpperCase()) ||
+    (i.code && String(i.code).toUpperCase() === targetId.toUpperCase()) ||
+    (i.displayId && String(i.displayId).toUpperCase() === targetId.toUpperCase())
+  ) : null;
+
+  const isOwnReport = currentUser && currentIssue && (
+    currentIssue.reportedBy === currentUser._id || 
+    currentIssue.reportedBy === currentUser.id ||
+    currentUser.role === 'admin'
+  );
 
   // Handle Search submit in State 1
   const handleSearchSubmit = (e) => {
@@ -56,9 +89,14 @@ const Track = () => {
       return;
     }
 
-    const matched = issues.find(i => i.id.toUpperCase() === query);
+    const matched = issues.find(i => 
+      (i.id && String(i.id).toUpperCase() === query) ||
+      (i._id && String(i._id).toUpperCase() === query) ||
+      (i.code && String(i.code).toUpperCase() === query) ||
+      (i.displayId && String(i.displayId).toUpperCase() === query)
+    );
     if (matched) {
-      setSearchParams({ id: matched.id });
+      setSearchParams({ id: matched.code || matched.id });
     } else {
       setSearchError(`No report found with ID "${query}". Please verify the ID and try again.`);
     }
@@ -425,6 +463,33 @@ const Track = () => {
                 );
               })}
             </div>
+
+            {/* Citizen Resolution Verification Panel */}
+            {(currentIssue.status === 'RESOLVED' || normalizedStatus === 'Resolved') && (
+              <div className="mt-6 bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs uppercase tracking-wider">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Resolution Verification Required</span>
+                </div>
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  The municipal department has marked this issue as resolved. Please inspect the fix and approve or reopen the report.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    onClick={handleVerifyApprove}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-xs"
+                  >
+                    Approve & Verify Resolution
+                  </button>
+                  <button
+                    onClick={handleVerifyReject}
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-colors"
+                  >
+                    Reject & Reopen Report
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* CivicAI Analysis Summary (If available) */}

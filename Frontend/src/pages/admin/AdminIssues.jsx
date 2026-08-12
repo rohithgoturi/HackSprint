@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCivic } from '../../context/CivicContext';
 import StatusBadge from '../../components/StatusBadge';
@@ -9,7 +9,9 @@ import {
   ChevronRight, 
   RotateCcw,
   ArrowUpDown,
-  FileX
+  FileX,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 const DEPARTMENT_OPTIONS = [
@@ -23,7 +25,11 @@ const DEPARTMENT_OPTIONS = [
 ];
 
 const AdminIssues = () => {
-  const { issues, filters, setFilters, resetFilters } = useCivic();
+  const { issues, filters, setFilters, resetFilters, fetchComplaints, loading, error } = useCivic();
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [fetchComplaints]);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 

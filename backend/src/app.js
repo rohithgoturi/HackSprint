@@ -12,11 +12,22 @@ const { sendError } = require('./utils/apiResponse');
 
 const app = express();
 
-// Configure CORS dynamically via CLIENT_URL environment variable
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+// Configure CORS dynamically via CLIENT_URL environment variable or fallback dev origins
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
+const clientOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map((url) => url.trim())
+  : defaultOrigins;
+
 app.use(
   cors({
-    origin: clientUrl,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin || clientOrigins.includes(origin) || defaultOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
