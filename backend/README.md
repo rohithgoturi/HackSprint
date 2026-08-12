@@ -1,11 +1,12 @@
 # PS 17 - Crowdsourced Civic Issue Reporting and Resolution System (Backend)
 
-Backend foundation for the web-first civic issue lifecycle management platform connecting citizens, government authorities, and field workers.
+Backend service for the web-first civic issue lifecycle management platform connecting citizens, government authorities, and field workers.
 
 ## Tech Stack
 - Node.js
 - Express.js
 - MongoDB Atlas / Mongoose
+- JWT (jsonwebtoken) & bcryptjs
 - JavaScript (CommonJS)
 - REST APIs
 
@@ -17,9 +18,11 @@ PORT=5000
 NODE_ENV=development
 MONGODB_URI=mongodb://127.0.0.1:27017/civic_platform
 CLIENT_URL=http://localhost:3000
+JWT_SECRET=your_jwt_secret_key_here
+JWT_EXPIRES_IN=7d
 ```
 
-## Setup Instructions
+## Setup & Execution
 
 1. Navigate to the `backend` directory:
    ```bash
@@ -31,25 +34,32 @@ CLIENT_URL=http://localhost:3000
    npm install
    ```
 
-3. Run in development mode:
+3. Seed development accounts (ADMIN, FIELD_WORKER, CITIZEN):
+   ```bash
+   npm run seed
+   ```
+
+4. Run in development mode:
    ```bash
    npm run dev
    ```
 
-4. Start in production mode:
+5. Start in production mode:
    ```bash
    npm start
    ```
 
 ## API Endpoints
 
-### Health Check
-- **URL**: `GET /api/health`
-- **Response Example**:
-  ```json
-  {
-    "success": true,
-    "message": "Civic platform backend is running",
-    "database": "connected"
-  }
-  ```
+### System Health
+- **GET** `/api/health` - Check server & MongoDB status.
+
+### Authentication (`/api/auth`)
+- **POST** `/api/auth/register` - Public citizen registration (`CITIZEN` role default).
+- **POST** `/api/auth/login` - User login & JWT token retrieval.
+- **GET** `/api/auth/me` - Get currently authenticated user profile (Requires `Authorization: Bearer <token>`).
+
+## Development Credentials (after `npm run seed`)
+- **Admin**: `admin@civic.local` / `AdminPassword123!`
+- **Field Worker**: `worker@civic.local` / `WorkerPassword123!`
+- **Citizen**: `citizen@civic.local` / `CitizenPassword123!`

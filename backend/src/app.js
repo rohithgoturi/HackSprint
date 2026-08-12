@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const healthRoutes = require('./routes/healthRoutes');
+const authRoutes = require('./routes/authRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { sendError } = require('./utils/apiResponse');
 
@@ -22,10 +23,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Mount routes
+app.use('/api/auth', authRoutes);
+app.use('/api/health', healthRoutes);
 app.use('/api', healthRoutes);
 
 // 404 Handler for unregistered routes
-app.use('*', (req, res) => {
+app.use((req, res) => {
   return sendError(res, 404, `Route ${req.originalUrl} not found`);
 });
 

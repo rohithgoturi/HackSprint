@@ -4,11 +4,9 @@ const mongoose = require('mongoose');
 const router = express.Router();
 
 /**
- * @route   GET /api/health
- * @desc    Health check endpoint reporting actual backend and MongoDB status
- * @access  Public
+ * Health check handler reporting actual backend and MongoDB status
  */
-router.get('/health', (req, res) => {
+const getHealth = (req, res) => {
   const stateMap = {
     0: 'disconnected',
     1: 'connected',
@@ -24,6 +22,15 @@ router.get('/health', (req, res) => {
     message: 'Civic platform backend is running',
     database: databaseStatus
   });
-});
+};
+
+/**
+ * @route   GET /api/health
+ * @desc    Health check endpoint reporting actual backend and MongoDB status
+ * @access  Public
+ */
+router.get('/health', getHealth);
+router.get('/', getHealth);
 
 module.exports = router;
+
