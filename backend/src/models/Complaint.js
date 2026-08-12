@@ -83,6 +83,14 @@ const complaintSchema = new mongoose.Schema(
         message: 'Invalid complaint status'
       },
       default: 'REPORTED'
+    },
+    aiAnalysis: {
+      issue: { type: String, default: null },
+      category: { type: String, default: null },
+      severity: { type: String, default: null },
+      departmentRecommendation: { type: String, default: null },
+      reasoning: { type: String, default: null },
+      analyzedAt: { type: Date, default: null }
     }
   },
   {

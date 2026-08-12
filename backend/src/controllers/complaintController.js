@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 const Complaint = require('../models/Complaint');
 const ComplaintUpdate = require('../models/ComplaintUpdate');
 const User = require('../models/User');
+const geminiService = require('../services/geminiService');
+const departmentService = require('../services/departmentService');
+const priorityService = require('../services/priorityService');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 
 // Allowed status lifecycle transitions
@@ -122,6 +125,7 @@ const getComplaints = async (req, res, next) => {
     const complaints = await Complaint.find(filter)
       .populate('citizen', 'name email phone')
       .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category')
       .sort({ createdAt: -1 });
 
     return sendSuccess(res, 200, 'Complaints retrieved successfully', complaints);
@@ -145,7 +149,8 @@ const getComplaintById = async (req, res, next) => {
 
     const complaint = await Complaint.findById(id)
       .populate('citizen', 'name email phone')
-      .populate('assignedWorker', 'name email phone');
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
 
     if (!complaint) {
       return sendError(res, 404, 'Complaint not found');
@@ -266,7 +271,8 @@ const updateComplaintStatus = async (req, res, next) => {
 
     const updatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
-      .populate('assignedWorker', 'name email phone');
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
 
     return sendSuccess(res, 200, 'Complaint status updated successfully', {
       complaint: updatedComplaint.toJSON(),
@@ -329,11 +335,95 @@ const assignComplaint = async (req, res, next) => {
 
     const updatedComplaint = await Complaint.findById(complaint._id)
       .populate('citizen', 'name email phone')
-      .populate('assignedWorker', 'name email phone');
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
 
     return sendSuccess(res, 200, 'Complaint assigned successfully', {
       complaint: updatedComplaint.toJSON(),
       updateRecord: updateRecord.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   POST /api/complaints/:id/analyze
+ * @desc    Analyze complaint using Gemini AI, map department, calculate priority
+ * @access  Private (CITIZEN, ADMIN)
+ */
+const analyzeComplaint = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Authorization checks
+    const { role, _id } = req.user;
+    if (role === 'FIELD_WORKER') {
+      return sendError(res, 403, 'Access denied: field workers cannot trigger AI analysis');
+    }
+
+    if (role === 'CITIZEN') {
+      const citizenIdStr = complaint.citizen._id
+        ? complaint.citizen._id.toString()
+        : complaint.citizen.toString();
+      if (citizenIdStr !== _id.toString()) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    }
+
+    if (!complaint.description || complaint.description.trim() === '') {
+      return sendError(res, 400, 'Complaint description is required for AI analysis');
+    }
+
+    // Trigger Gemini AI analysis service
+    const aiOutput = await geminiService.analyzeComplaint({
+      description: complaint.description,
+      imageUrl: complaint.imageUrl
+    });
+
+    // Map department deterministically
+    const department = await departmentService.getDepartmentForCategory(aiOutput.category);
+
+    // Calculate priority using priority engine
+    const priority = priorityService.calculatePriority({
+      severity: aiOutput.severity,
+      category: aiOutput.category,
+      location: complaint.location
+    });
+
+    // Update complaint record
+    complaint.issue = aiOutput.issue;
+    complaint.category = aiOutput.category;
+    complaint.severity = aiOutput.severity;
+    complaint.priority = priority;
+    complaint.department = department._id;
+    complaint.aiAnalysis = {
+      issue: aiOutput.issue,
+      category: aiOutput.category,
+      severity: aiOutput.severity,
+      departmentRecommendation: aiOutput.departmentRecommendation,
+      reasoning: aiOutput.reasoning,
+      analyzedAt: new Date()
+    };
+
+    await complaint.save();
+
+    const updatedComplaint = await Complaint.findById(complaint._id)
+      .populate('citizen', 'name email phone')
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
+
+    return sendSuccess(res, 200, 'Complaint analyzed successfully', {
+      complaint: updatedComplaint.toJSON()
     });
   } catch (error) {
     next(error);
@@ -345,5 +435,7 @@ module.exports = {
   getComplaints,
   getComplaintById,
   updateComplaintStatus,
-  assignComplaint
+  assignComplaint,
+  analyzeComplaint
 };
+

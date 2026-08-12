@@ -4,7 +4,8 @@ const {
   getComplaints,
   getComplaintById,
   updateComplaintStatus,
-  assignComplaint
+  assignComplaint,
+  analyzeComplaint
 } = require('../controllers/complaintController');
 const { authenticate, authorizeRoles } = require('../middleware/authMiddleware');
 
@@ -30,6 +31,13 @@ router.get('/', authenticate, getComplaints);
  * @access  Private
  */
 router.get('/:id', authenticate, getComplaintById);
+
+/**
+ * @route   POST /api/complaints/:id/analyze
+ * @desc    Analyze complaint using Gemini AI
+ * @access  Private (CITIZEN, ADMIN)
+ */
+router.post('/:id/analyze', authenticate, authorizeRoles('CITIZEN', 'ADMIN'), analyzeComplaint);
 
 /**
  * @route   PATCH /api/complaints/:id/status
