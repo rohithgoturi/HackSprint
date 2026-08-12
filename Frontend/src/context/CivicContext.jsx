@@ -80,12 +80,12 @@ export const CivicProvider = ({ children }) => {
   // Toast Notification State
   const [toast, setToast] = useState(null);
 
-  const showToast = (message, type = 'info') => {
+  const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => {
       setToast(null);
     }, 3200);
-  };
+  }, []);
 
   // State Definitions
   const [currentUser, setCurrentUser] = useState(null);
@@ -383,7 +383,7 @@ export const CivicProvider = ({ children }) => {
     }
   };
 
-  const fetchCitizenDashboard = async () => {
+  const fetchCitizenDashboard = useCallback(async () => {
     try {
       const res = await dashboardAPI.getCitizenDashboard();
       if (res.data && res.data.success) {
@@ -393,9 +393,9 @@ export const CivicProvider = ({ children }) => {
     } catch (err) {
       console.warn('[Citizen Dashboard Error]', err.message);
     }
-  };
+  }, []);
 
-  const fetchAdminDashboard = async () => {
+  const fetchAdminDashboard = useCallback(async () => {
     try {
       const res = await dashboardAPI.getAdminDashboard();
       if (res.data && res.data.success) {
@@ -405,9 +405,9 @@ export const CivicProvider = ({ children }) => {
     } catch (err) {
       console.warn('[Admin Dashboard Error]', err.message);
     }
-  };
+  }, []);
 
-  const fetchWorkers = async () => {
+  const fetchWorkers = useCallback(async () => {
     try {
       const res = await adminAPI.getWorkers();
       if (res.data && res.data.success && Array.isArray(res.data.data)) {
@@ -417,9 +417,9 @@ export const CivicProvider = ({ children }) => {
     } catch (err) {
       console.warn('[Fetch Workers Error]', err.message);
     }
-  };
+  }, []);
 
-  const fetchDepartments = async () => {
+  const fetchDepartments = useCallback(async () => {
     try {
       const res = await adminAPI.getDepartments();
       if (res.data && res.data.success && Array.isArray(res.data.data)) {
@@ -429,9 +429,9 @@ export const CivicProvider = ({ children }) => {
     } catch (err) {
       console.warn('[Fetch Departments Error]', err.message);
     }
-  };
+  }, []);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       const res = await notificationAPI.getAll();
       if (res.data && res.data.success && Array.isArray(res.data.data?.notifications)) {
@@ -441,7 +441,7 @@ export const CivicProvider = ({ children }) => {
     } catch (err) {
       console.warn('[Notifications Fetch Error]', err.message);
     }
-  };
+  }, []);
 
   const resetFilters = () => {
     setFilters({
