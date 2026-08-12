@@ -56,6 +56,9 @@ async function runTests() {
   console.log('==================================================\n');
 
   try {
+    const connectDB = require('../config/db');
+    await connectDB();
+
     // 0. Authenticate Users
     console.log('--> Authenticating Test Users...');
     let c1Login = await request('/api/auth/login', {

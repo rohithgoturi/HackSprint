@@ -1123,6 +1123,111 @@ const closeComplaint = async (req, res, next) => {
   }
 };
 
+/**
+ * @route   POST /api/complaints/enhance-description
+ * @desc    Get AI suggestions and polished draft for a complaint description
+ * @access  Private
+ */
+const enhanceDescriptionHandler = async (req, res, next) => {
+  try {
+    const { description } = req.body;
+
+    if (!description || description.trim() === '') {
+      return sendError(res, 400, 'Complaint description is required');
+    }
+
+    const result = await geminiService.enhanceDescription({ description });
+
+    return sendSuccess(res, 200, 'Description enhancement suggestions generated', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   GET /api/complaints/:id/similar
+ * @desc    Identify potential duplicate or similar complaints using MongoDB search + Gemini AI
+ * @access  Private
+ */
+const findSimilarComplaintsHandler = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Role authorization check
+    const { role, _id } = req.user;
+    const userIdStr = _id.toString();
+
+    if (role === 'CITIZEN') {
+      const citizenIdStr = complaint.citizen._id
+        ? complaint.citizen._id.toString()
+        : complaint.citizen.toString();
+      if (citizenIdStr !== userIdStr) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    }
+
+    // Query candidate complaints from MongoDB matching same category or unclassified
+    const candidateQuery = {
+      _id: { $ne: complaint._id }
+    };
+    if (complaint.category && complaint.category !== 'other') {
+      candidateQuery.category = complaint.category;
+    }
+
+    const candidateComplaints = await Complaint.find(candidateQuery)
+      .select('id description issue category priority status createdAt')
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    if (candidateComplaints.length === 0) {
+      return sendSuccess(res, 200, 'No candidate similar complaints found', {
+        similarComplaints: []
+      });
+    }
+
+    // Run semantic similarity check using Gemini AI
+    const similarityResults = await geminiService.checkSimilarity({
+      targetComplaint: complaint,
+      candidateComplaints
+    });
+
+    // Merge similarity evaluations with candidate metadata
+    const similarComplaintsMap = {};
+    similarityResults.forEach((r) => {
+      similarComplaintsMap[r.id] = r;
+    });
+
+    const enrichedMatches = candidateComplaints
+      .map((c) => {
+        const evalObj = similarComplaintsMap[c._id.toString()] || {};
+        return {
+          complaint: c.toJSON(),
+          similarityScore: evalObj.similarityScore || 0,
+          isDuplicate: evalObj.isDuplicate || false,
+          reasoning: evalObj.reasoning || 'Low text similarity'
+        };
+      })
+      .filter((item) => item.similarityScore > 30)
+      .sort((a, b) => b.similarityScore - a.similarityScore);
+
+    return sendSuccess(res, 200, 'Similar complaints evaluated', {
+      targetComplaintId: complaint.id,
+      similarComplaints: enrichedMatches
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createComplaint,
   getComplaints,
@@ -1137,7 +1242,10 @@ module.exports = {
   submitResolution,
   getResolutionEvidence,
   verifyResolution,
-  closeComplaint
+  closeComplaint,
+  enhanceDescriptionHandler,
+  findSimilarComplaintsHandler
 };
+
 
 

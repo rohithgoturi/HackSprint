@@ -13,7 +13,9 @@ const {
   submitResolution,
   getResolutionEvidence,
   verifyResolution,
-  closeComplaint
+  closeComplaint,
+  enhanceDescriptionHandler,
+  findSimilarComplaintsHandler
 } = require('../controllers/complaintController');
 const { authenticate, authorizeRoles } = require('../middleware/authMiddleware');
 
@@ -25,6 +27,13 @@ const router = express.Router();
  * @access  Private (CITIZEN)
  */
 router.post('/', authenticate, authorizeRoles('CITIZEN'), createComplaint);
+
+/**
+ * @route   POST /api/complaints/enhance-description
+ * @desc    Get AI assistance and suggestions to improve complaint description
+ * @access  Private
+ */
+router.post('/enhance-description', authenticate, enhanceDescriptionHandler);
 
 /**
  * @route   GET /api/complaints
@@ -39,6 +48,13 @@ router.get('/', authenticate, getComplaints);
  * @access  Private
  */
 router.get('/:id', authenticate, getComplaintById);
+
+/**
+ * @route   GET /api/complaints/:id/similar
+ * @desc    Get potential duplicate or similar complaints using Gemini AI
+ * @access  Private
+ */
+router.get('/:id/similar', authenticate, findSimilarComplaintsHandler);
 
 /**
  * @route   GET /api/complaints/:id/timeline

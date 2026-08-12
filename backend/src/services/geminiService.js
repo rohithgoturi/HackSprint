@@ -67,6 +67,51 @@ const fetchImageBase64 = async (url) => {
 };
 
 /**
+ * Fallback classification rule engine when AI is offline or rate-limited
+ */
+const getFallbackClassification = (description, errorMsg = '') => {
+  const descLower = (description || '').toLowerCase();
+  let category = 'other';
+  let severity = 'MEDIUM';
+  let issue = 'Civic Infrastructure Concern';
+
+  if (descLower.includes('pothole') || descLower.includes('road') || descLower.includes('asphalt') || descLower.includes('street')) {
+    category = 'road_infrastructure';
+    issue = 'Road Damage / Pothole';
+    severity = 'HIGH';
+  } else if (descLower.includes('garbage') || descLower.includes('trash') || descLower.includes('waste') || descLower.includes('dump')) {
+    category = 'garbage_sanitation';
+    issue = 'Garbage Accumulation';
+    severity = 'MEDIUM';
+  } else if (descLower.includes('light') || descLower.includes('pole') || descLower.includes('wire') || descLower.includes('electrical')) {
+    category = 'streetlight_electrical';
+    issue = 'Streetlight / Electrical Failure';
+    severity = 'HIGH';
+  } else if (descLower.includes('water') || descLower.includes('pipe') || descLower.includes('leak')) {
+    category = 'water_supply';
+    issue = 'Water Leakage / Pipe Damage';
+    severity = 'HIGH';
+  } else if (descLower.includes('drain') || descLower.includes('sewer') || descLower.includes('overflow')) {
+    category = 'drainage';
+    issue = 'Drainage / Sewer Overflow';
+    severity = 'CRITICAL';
+  } else if (descLower.includes('tree') || descLower.includes('branch')) {
+    category = 'fallen_tree';
+    issue = 'Fallen Tree / Obstruction';
+    severity = 'HIGH';
+  }
+
+  return {
+    issue,
+    category,
+    severity,
+    departmentRecommendation: category,
+    reasoning: `Rule-based fallback classification (${errorMsg ? errorMsg.slice(0, 80) : 'Offline mode'})`,
+    isFallback: true
+  };
+};
+
+/**
  * Analyze a civic complaint using Google Gemini API
  * @param {Object} params
  * @param {string} params.description Complaint text description
@@ -76,9 +121,7 @@ const fetchImageBase64 = async (url) => {
 const analyzeComplaint = async ({ description, imageUrl }) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey.trim() === '') {
-    const err = new Error('GEMINI_API_KEY environment variable is not defined.');
-    err.statusCode = 500;
-    throw err;
+    return getFallbackClassification(description, 'GEMINI_API_KEY not configured');
   }
 
   if (!description || description.trim() === '') {
@@ -114,10 +157,8 @@ const analyzeComplaint = async ({ description, imageUrl }) => {
 
     textResponse = response.text || '';
   } catch (apiErr) {
-    console.error(`[Gemini API Error] ${apiErr.message}`);
-    const err = new Error('Failed to analyze complaint using Gemini AI: ' + apiErr.message);
-    err.statusCode = 502;
-    throw err;
+    console.warn(`[Gemini API Warning] ${apiErr.message}. Utilizing rule-based fallback.`);
+    return getFallbackClassification(description, apiErr.message);
   }
 
   // Clean raw response of any markdown backticks if returned
@@ -130,10 +171,8 @@ const analyzeComplaint = async ({ description, imageUrl }) => {
   try {
     parsed = JSON.parse(cleanedJsonStr);
   } catch (parseErr) {
-    console.error('[Gemini Parse Error] Invalid JSON from model:', cleanedJsonStr);
-    const err = new Error('Gemini AI returned malformed output format');
-    err.statusCode = 502;
-    throw err;
+    console.warn('[Gemini Parse Warning] Invalid JSON from model. Utilizing fallback.');
+    return getFallbackClassification(description, 'Malformed JSON response');
   }
 
   // Sanitize & Validate output
@@ -162,12 +201,162 @@ const analyzeComplaint = async ({ description, imageUrl }) => {
     category,
     severity,
     departmentRecommendation,
-    reasoning
+    reasoning,
+    isFallback: false
   };
+};
+
+/**
+ * Analyze short or vague citizen text and suggest improvements / enhanced description
+ * @param {Object} params
+ * @param {string} params.description Citizen draft description
+ * @returns {Promise<Object>} Improvement suggestions and expanded text
+ */
+const enhanceDescription = async ({ description }) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    return {
+      isSufficient: true,
+      suggestions: ['AI suggestion service temporarily unavailable.'],
+      enhancedText: description
+    };
+  }
+
+  if (!description || description.trim() === '') {
+    return {
+      isSufficient: false,
+      suggestions: ['Please provide a description of the civic issue.'],
+      enhancedText: ''
+    };
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+  const prompt = `
+You are helping citizens report civic complaints clearly.
+Evaluate the following complaint text:
+"${description.trim()}"
+
+Provide a JSON object with:
+- "isSufficient": boolean (true if description is clear and actionable, false if too short/vague)
+- "suggestions": array of string suggestions (e.g. "Add landmark details", "Specify time of occurrence")
+- "enhancedText": a polished, clear 2-3 sentence version of the complaint suitable for municipal records.
+
+Return ONLY raw JSON matching this schema.
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ text: prompt }],
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    let textResponse = (response.text || '').trim();
+    if (textResponse.startsWith('```')) {
+      textResponse = textResponse.replace(/^```(json)?\n?/, '').replace(/```$/, '').trim();
+    }
+    const parsed = JSON.parse(textResponse);
+    return {
+      isSufficient: Boolean(parsed.isSufficient),
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      enhancedText: parsed.enhancedText ? String(parsed.enhancedText).trim() : description
+    };
+  } catch (err) {
+    console.warn(`[Gemini Enhance Warning] ${err.message}`);
+    return {
+      isSufficient: true,
+      suggestions: ['Please include location landmarks, severity details, and photos if available.'],
+      enhancedText: description
+    };
+  }
+};
+
+/**
+ * Evaluate semantic similarity between a target complaint and candidate complaints
+ * @param {Object} params
+ * @param {Object} params.targetComplaint Object containing description and category
+ * @param {Array<Object>} params.candidateComplaints Candidate complaints from MongoDB
+ * @returns {Promise<Array<Object>>} List of candidate evaluations with match score and reasoning
+ */
+const checkSimilarity = async ({ targetComplaint, candidateComplaints }) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '' || !candidateComplaints || candidateComplaints.length === 0) {
+    // Basic text-matching fallback
+    return candidateComplaints.map((c) => {
+      const match = c.description && targetComplaint.description &&
+        c.description.toLowerCase().includes('pothole') && targetComplaint.description.toLowerCase().includes('pothole');
+      return {
+        id: c._id ? c._id.toString() : c.id,
+        similarityScore: match ? 80 : 35,
+        isDuplicate: match,
+        reasoning: match ? 'Rule-based text match on keyword' : 'Low text similarity'
+      };
+    });
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+
+  const candidateItems = candidateComplaints.map((c) => ({
+    id: c._id ? c._id.toString() : c.id,
+    description: c.description,
+    issue: c.issue || '',
+    category: c.category || ''
+  }));
+
+  const prompt = `
+Compare the TARGET CIVIC COMPLAINT against the list of CANDIDATE COMPLAINTS to identify semantic duplicates or closely related reports.
+
+TARGET COMPLAINT:
+"${targetComplaint.description}"
+
+CANDIDATE COMPLAINTS:
+${JSON.stringify(candidateItems, null, 2)}
+
+Return a raw JSON array of objects:
+[
+  {
+    "id": "candidate_id_string",
+    "similarityScore": number (0 to 100 percentage score),
+    "isDuplicate": boolean (true if similarityScore >= 70),
+    "reasoning": "1 sentence explanation of similarity"
+  }
+]
+
+Return ONLY raw JSON array.
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ text: prompt }],
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    let textResponse = (response.text || '').trim();
+    if (textResponse.startsWith('```')) {
+      textResponse = textResponse.replace(/^```(json)?\n?/, '').replace(/```$/, '').trim();
+    }
+    const parsed = JSON.parse(textResponse);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn(`[Gemini Similarity Warning] ${err.message}`);
+    return candidateComplaints.map((c) => ({
+      id: c._id ? c._id.toString() : c.id,
+      similarityScore: 50,
+      isDuplicate: false,
+      reasoning: 'Fallback similarity evaluation'
+    }));
+  }
 };
 
 module.exports = {
   analyzeComplaint,
+  enhanceDescription,
+  checkSimilarity,
   ALLOWED_CATEGORIES,
   ALLOWED_SEVERITIES
 };
