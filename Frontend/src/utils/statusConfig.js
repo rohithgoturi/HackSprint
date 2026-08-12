@@ -8,7 +8,7 @@ export const STATUS_STAGES = [
     progress: 16,
     icon: CheckCircle2,
     description: 'Your issue has been successfully submitted and is waiting for analysis.',
-    nextStep: 'CivicAI will analyze your report.'
+    nextStep: 'JanSetu AI will analyze your report.'
   },
   {
     key: 'AI Analyzed',
@@ -16,7 +16,7 @@ export const STATUS_STAGES = [
     order: 2,
     progress: 33,
     icon: Brain,
-    description: 'CivicAI has reviewed your report and identified the issue category and priority.',
+    description: 'JanSetu AI has reviewed your report and identified the issue category and priority.',
     nextStep: 'The report is being reviewed for assignment.'
   },
   {

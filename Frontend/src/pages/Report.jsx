@@ -243,7 +243,7 @@ const Report = () => {
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-civic-navy font-sans">Report Submitted</h2>
             <p className="text-xs text-civic-muted leading-relaxed">
-              Your issue has been recorded. CivicAI can now analyze your report.
+              Your issue has been recorded. JanSetu AI can now analyze your report.
             </p>
           </div>
 
@@ -302,7 +302,7 @@ const Report = () => {
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Link to={`/analyze/${newIssueId}`} className="flex-grow">
               <Button variant="primary" size="md" className="w-full font-bold" icon={Brain}>
-                ANALYZE WITH CIVICAI
+                ANALYZE WITH JANSETU AI
               </Button>
             </Link>
             <Link to={`/track?id=${newIssueId}`} className="flex-grow">
@@ -478,7 +478,7 @@ const Report = () => {
                 ) : (
                   <div className="border border-slate-200 rounded-lg p-5 flex items-center justify-center gap-3 text-civic-muted bg-slate-50/20 text-xs">
                     <ImageIcon className="w-5 h-5 text-slate-300" />
-                    <span>Photos help CivicAI dispatchers categorize the issue correctly. (Optional)</span>
+                    <span>Photos help JanSetu AI dispatchers categorize the issue correctly. (Optional)</span>
                   </div>
                 )}
               </div>

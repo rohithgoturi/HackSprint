@@ -143,7 +143,7 @@ const Track = () => {
 
         <SectionHeading 
           title="Track Your Report" 
-          subtitle="Enter your CivicAI report ID to see the latest status, priority rating, AI analysis details, and resolution timeline of your issue."
+          subtitle="Enter your JanSetu AI report ID to see the latest status, priority rating, AI analysis details, and resolution timeline of your issue."
         />
 
         {/* Search Box Card */}
@@ -269,7 +269,7 @@ const Track = () => {
             <ChevronLeft className="w-3.5 h-3.5" /> Track Another Report
           </button>
           <span className="text-[10px] font-bold text-civic-action uppercase tracking-wider block font-mono">
-            CIVICAI DISPATCH TRACKING
+            JANSETU AI DISPATCH TRACKING
           </span>
           <h1 className="text-2xl font-extrabold text-civic-navy tracking-tight mt-0.5">
             Track Your Report
@@ -492,11 +492,11 @@ const Track = () => {
             )}
           </div>
 
-          {/* CivicAI Analysis Summary (If available) */}
+          {/* JanSetu AI Analysis Summary (If available) */}
           <div className="bg-white border border-civic-border rounded-xl p-6 shadow-civic-subtle space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
               <h2 className="text-xs font-bold text-civic-navy uppercase tracking-wider flex items-center gap-1.5">
-                <Brain className="w-4 h-4 text-civic-action" /> CivicAI Intelligence Summary
+                <Brain className="w-4 h-4 text-civic-action" /> JanSetu AI Intelligence Summary
               </h2>
               {currentIssue.aiAnalysis && (
                 <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded font-mono">
@@ -521,7 +521,7 @@ const Track = () => {
               </div>
             ) : (
               <div className="text-xs text-civic-muted flex items-center justify-between gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <span>CivicAI analysis is not available for this report yet.</span>
+                <span>JanSetu AI analysis is not available for this report yet.</span>
                 <Link to={`/analyze/${currentIssue.id}`}>
                   <Button variant="secondary" size="sm" icon={Brain} className="text-xs font-bold cursor-pointer">
                     Analyze Now

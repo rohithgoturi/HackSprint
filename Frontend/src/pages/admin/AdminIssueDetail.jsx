@@ -288,7 +288,7 @@ const AdminIssueDetail = () => {
           <div className="bg-white border border-civic-border rounded-xl p-6 shadow-civic-subtle space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
               <h2 className="text-xs font-bold text-[#10213F] uppercase tracking-wider flex items-center gap-1.5">
-                <Brain className="w-4 h-4 text-civic-action" /> CivicAI Automated Assessment
+                <Brain className="w-4 h-4 text-civic-action" /> JanSetu AI Automated Assessment
               </h2>
               {currentIssue.aiAnalysis && (
                 <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-mono">

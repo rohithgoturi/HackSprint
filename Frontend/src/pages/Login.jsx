@@ -12,8 +12,8 @@ import { Landmark, ShieldAlert, User, KeyRound, AlertCircle, Loader2, Wrench } f
 
    const redirectUrl = searchParams.get('redirect') || '';
 
-   const [email, setEmail] = useState('');
-   const [password, setPassword] = useState('');
+   const [email, setEmail] = useState('citizena_p3@civic.local');
+   const [password, setPassword] = useState('CitizenPassword123!');
    const [isAdminRole, setIsAdminRole] = useState(false);
    const [error, setError] = useState('');
    const [isSubmitting, setIsSubmitting] = useState(false);
@@ -113,7 +113,7 @@ import { Landmark, ShieldAlert, User, KeyRound, AlertCircle, Loader2, Wrench } f
              <Landmark className="w-6 h-6" />
            </div>
            <h1 className="text-xl font-extrabold tracking-tight text-[#10213F] uppercase">
-             WELCOME TO CIVICAI
+             WELCOME TO JANSETU AI
            </h1>
            <p className="text-xs text-civic-muted leading-relaxed max-w-xs mx-auto">
              "Access your civic reports and follow issues through resolution."
@@ -235,7 +235,7 @@ import { Landmark, ShieldAlert, User, KeyRound, AlertCircle, Loader2, Wrench } f
         {/* System Notice */}
         <div className="border-t border-slate-100 pt-4 text-center">
           <p className="text-[10px] text-slate-400 font-mono leading-relaxed">
-            Connected to CivicAI Backend API (JWT Secured)
+            Connected to JanSetu AI Backend API (JWT Secured)
           </p>
         </div>
 

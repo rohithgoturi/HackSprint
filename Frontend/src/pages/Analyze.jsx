@@ -75,7 +75,7 @@ const Analyze = () => {
           </div>
           <h2 className="text-xl font-bold tracking-tight text-civic-navy font-sans">Report Not Found</h2>
           <p className="text-xs text-civic-muted leading-relaxed">
-            We couldn't find a CivicAI report matching ID <strong className="font-mono text-civic-navy">{id}</strong>. The report may have been removed or the ID may be incorrect.
+            We couldn't find a JanSetu AI report matching ID <strong className="font-mono text-civic-navy">{id}</strong>. The report may have been removed or the ID may be incorrect.
           </p>
           <div className="space-y-2 pt-2">
             <Link to="/track" className="block">
@@ -105,13 +105,13 @@ const Analyze = () => {
       {/* Analysis Header */}
       <div>
         <div className="inline-flex items-center gap-1.5 bg-blue-50 text-civic-action border border-blue-100 rounded px-2.5 py-1 text-xs font-semibold uppercase tracking-wider mb-2 font-mono">
-          <Brain className="w-3.5 h-3.5" /> CivicAI Intelligence Processing
+          <Brain className="w-3.5 h-3.5" /> JanSetu AI Intelligence Processing
         </div>
         <h1 className="text-2xl sm:text-3.5xl font-extrabold tracking-tight text-civic-navy leading-snug">
           Understanding Your Report
         </h1>
         <p className="text-xs sm:text-sm text-civic-muted mt-1.5 max-w-2xl leading-relaxed">
-          CivicAI is analyzing the information you provided to identify the issue, determine its priority, and route it to the appropriate civic team.
+          JanSetu AI is analyzing the information you provided to identify the issue, determine its priority, and route it to the appropriate civic team.
         </p>
       </div>
 
@@ -168,7 +168,7 @@ const Analyze = () => {
               <div className="bg-white border border-civic-border rounded-xl p-6 shadow-civic-normal space-y-5">
                 <div className="flex justify-between items-center border-b border-civic-light-gray pb-3">
                   <span className="text-[10px] font-bold text-civic-action uppercase tracking-wider flex items-center gap-1 font-mono">
-                    <ShieldCheck className="w-3.5 h-3.5" /> CivicAI Analysis Complete
+                    <ShieldCheck className="w-3.5 h-3.5" /> JanSetu AI Analysis Complete
                   </span>
                   <span className="bg-emerald-50 text-emerald-800 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded font-mono">
                     {analysisResult?.confidence} Confidence

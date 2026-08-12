@@ -231,7 +231,7 @@ const AdminOverview = () => {
           <div className="bg-white border border-civic-border rounded-xl p-5 shadow-civic-subtle space-y-4">
             <div className="flex items-center gap-2 text-civic-action font-extrabold text-xs uppercase tracking-wider">
               <Brain className="w-4 h-4 text-purple-600" />
-              <span>CivicAI Operational Health</span>
+              <span>JanSetu AI Operational Health</span>
             </div>
             <div className="bg-purple-50/60 border border-purple-100 rounded-lg p-3 space-y-2">
               <div className="text-xs text-purple-900 font-bold">

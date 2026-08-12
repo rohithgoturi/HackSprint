@@ -310,7 +310,7 @@ export const CivicProvider = ({ children }) => {
       if (res.data && res.data.success && res.data.data.complaint) {
         const updated = formatComplaintForFrontend(res.data.data.complaint);
         setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-        showToast('CivicAI analysis completed successfully.', 'success');
+        showToast('JanSetu AI analysis completed successfully.', 'success');
         return updated;
       }
       throw new Error('AI analysis failed');

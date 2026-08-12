@@ -20,7 +20,7 @@ const NotFound = () => {
             PAGE NOT FOUND
           </h1>
           <p className="text-xs text-civic-muted leading-relaxed">
-            "THIS PAGE DOESN'T EXIST. Let's get you back to CivicAI."
+            "THIS PAGE DOESN'T EXIST. Let's get you back to JanSetu AI."
           </p>
         </div>
 

@@ -12,7 +12,7 @@ const Footer = () => {
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 text-white mb-3">
               <Landmark className="w-5 h-5 text-civic-action" />
-              <span className="text-base font-bold tracking-tight">CivicAI</span>
+              <span className="text-base font-bold tracking-tight">JanSetu AI</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
               Empowering communities with open, collaborative public infrastructure tracking. Developed in cooperation with municipal digital services.
@@ -57,10 +57,10 @@ const Footer = () => {
         <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row md:items-center md:justify-between text-[11px] text-slate-400 gap-4 text-left">
           <div className="max-w-2xl leading-relaxed">
             <span className="font-semibold text-amber-500 mr-1 font-sans">⚠️ PUBLIC SERVICE NOTICE:</span>
-            CivicAI is a portal for reporting non-emergency public infrastructure maintenance. If you are experiencing a situation that poses an immediate threat to public safety, life, or property, please dial emergency services (911) immediately.
+            JanSetu AI is a portal for reporting non-emergency public infrastructure maintenance. If you are experiencing a situation that poses an immediate threat to public safety, life, or property, please dial emergency services (911) immediately.
           </div>
           <div className="whitespace-nowrap font-mono">
-            &copy; {new Date().getFullYear()} CivicAI. Public Domain.
+            &copy; {new Date().getFullYear()} JanSetu AI. Public Domain.
           </div>
         </div>
       </Container>

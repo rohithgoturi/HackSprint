@@ -75,7 +75,7 @@ const Navbar = () => {
             <Link to={isAdmin ? "/admin" : "/"} className="flex items-center gap-2.5 text-civic-navy">
               <Landmark className="w-5.5 h-5.5 text-civic-action" />
               <span className="text-lg font-extrabold tracking-tight text-civic-navy">
-                Civic<span className="text-civic-action font-medium">AI</span>
+                JanSetu<span className="text-civic-action font-medium"> AI</span>
               </span>
               <span className="hidden sm:inline-block bg-civic-light-gray text-civic-muted text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded border border-slate-200">
                 {isAdmin ? "Operations Portal" : "Official Portal"}

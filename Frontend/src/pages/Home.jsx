@@ -142,9 +142,9 @@ const Home = () => {
     {
       num: '02',
       title: 'Understand',
-      tagline: 'CivicAI identifies the issue and evaluates its priority.',
+      tagline: 'JanSetu AI identifies the issue and evaluates its priority.',
       icon: Brain,
-      heading: 'CivicAI analyzes the report',
+      heading: 'JanSetu AI analyzes the report',
       desc: 'The platform instantly categorizes unstructured descriptions, checks for duplicates, and assigns a preliminary priority based on hazard severity and surrounding coordinates.',
       visualMock: (
         <div className="bg-slate-50 border border-civic-border rounded-lg p-5 text-left text-xs text-civic-navy space-y-3 font-sans shadow-sm">
@@ -261,7 +261,7 @@ const Home = () => {
                 Make Your City Better, One Report at a Time.
               </h1>
               <p className="text-base sm:text-lg text-civic-muted leading-relaxed max-w-lg">
-                CivicAI helps citizens report local problems, understand their impact, and track them until they are resolved.
+                JanSetu AI helps citizens report local problems, understand their impact, and track them until they are resolved.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link to="/report">
@@ -450,7 +450,7 @@ const Home = () => {
               Technology that understands civic problems.
             </h2>
             <p className="text-xs sm:text-sm text-civic-muted mt-2">
-              CivicAI turns unstructured citizen reports into clear, actionable information.
+              JanSetu AI turns unstructured citizen reports into clear, actionable information.
             </p>
           </div>
 
