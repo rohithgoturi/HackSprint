@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Complaint = require('../models/Complaint');
 const ComplaintUpdate = require('../models/ComplaintUpdate');
+const ResolutionEvidence = require('../models/ResolutionEvidence');
 const User = require('../models/User');
 const Department = require('../models/Department');
 const geminiService = require('../services/geminiService');
@@ -653,6 +654,317 @@ const getComplaintSla = async (req, res, next) => {
   }
 };
 
+/**
+ * @route   POST /api/complaints/:id/resolution
+ * @desc    Submit resolution evidence for a complaint (Field Worker assigned / Admin)
+ * @access  Private (FIELD_WORKER, ADMIN)
+ */
+const submitResolution = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { note, imageUrl, location } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Role check: Field workers must be assigned to this complaint
+    const { role, _id } = req.user;
+    if (role === 'FIELD_WORKER') {
+      if (!complaint.assignedWorker || complaint.assignedWorker.toString() !== _id.toString()) {
+        return sendError(res, 403, 'Access denied: you are not assigned to this complaint');
+      }
+    }
+
+    // Complaint status check: Must be IN_PROGRESS
+    if (complaint.status !== 'IN_PROGRESS') {
+      return sendError(
+        res,
+        400,
+        `Resolution evidence can only be submitted for complaints in IN_PROGRESS status (current status: ${complaint.status})`
+      );
+    }
+
+    // Body validation
+    if (!note || note.trim() === '') {
+      return sendError(res, 400, 'Resolution note is required');
+    }
+
+    let locationData = undefined;
+    if (location !== undefined && location !== null) {
+      const { latitude, longitude } = location;
+      if (
+        typeof latitude !== 'number' ||
+        typeof longitude !== 'number' ||
+        isNaN(latitude) ||
+        isNaN(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        return sendError(
+          res,
+          400,
+          'Invalid location coordinates. Latitude must be -90 to 90, Longitude must be -180 to 180'
+        );
+      }
+      locationData = { latitude, longitude };
+    }
+
+    // Create ResolutionEvidence record
+    const evidence = await ResolutionEvidence.create({
+      complaint: complaint._id,
+      submittedBy: req.user._id,
+      note: note.trim(),
+      imageUrl: imageUrl ? imageUrl.trim() : null,
+      location: locationData,
+      status: 'SUBMITTED'
+    });
+
+    // Update complaint status to RESOLVED
+    complaint.status = 'RESOLVED';
+    if (complaint.sla && complaint.sla.deadline) {
+      slaService.evaluateSlaStatus(complaint);
+    }
+    await complaint.save();
+
+    // Create history update record
+    const updateRecord = await ComplaintUpdate.create({
+      complaint: complaint._id,
+      user: req.user._id,
+      status: 'RESOLVED',
+      note: `Resolution evidence submitted: ${note.trim()}`
+    });
+
+    const updatedComplaint = await Complaint.findById(complaint._id)
+      .populate('citizen', 'name email phone')
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
+
+    return sendSuccess(res, 201, 'Resolution evidence submitted successfully', {
+      evidence: evidence.toJSON(),
+      complaint: updatedComplaint.toJSON(),
+      updateRecord: updateRecord.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   GET /api/complaints/:id/resolution
+ * @desc    Get resolution evidence history for a complaint
+ * @access  Private
+ */
+const getResolutionEvidence = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Role authorization check
+    const { role, _id } = req.user;
+    const userIdStr = _id.toString();
+
+    if (role === 'CITIZEN') {
+      const citizenIdStr = complaint.citizen._id
+        ? complaint.citizen._id.toString()
+        : complaint.citizen.toString();
+      if (citizenIdStr !== userIdStr) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    } else if (role === 'FIELD_WORKER') {
+      if (!complaint.assignedWorker) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+      const workerIdStr = complaint.assignedWorker._id
+        ? complaint.assignedWorker._id.toString()
+        : complaint.assignedWorker.toString();
+      if (workerIdStr !== userIdStr) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    }
+
+    const evidenceList = await ResolutionEvidence.find({ complaint: complaint._id })
+      .populate('submittedBy', 'name email role phone')
+      .sort({ submittedAt: -1 });
+
+    return sendSuccess(res, 200, 'Resolution evidence retrieved', {
+      evidence: evidenceList
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   PATCH /api/complaints/:id/verify
+ * @desc    Verify or reject complaint resolution evidence (Citizen owner / Admin)
+ * @access  Private (CITIZEN, ADMIN)
+ */
+const verifyResolution = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { approved, note } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    if (typeof approved !== 'boolean') {
+      return sendError(res, 400, 'Approval decision (boolean approved: true/false) is required');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Authorization check
+    const { role, _id } = req.user;
+    if (role === 'CITIZEN') {
+      const citizenIdStr = complaint.citizen._id
+        ? complaint.citizen._id.toString()
+        : complaint.citizen.toString();
+      if (citizenIdStr !== _id.toString()) {
+        return sendError(res, 403, 'Access denied: insufficient permissions');
+      }
+    }
+
+    // Complaint status check: MUST be RESOLVED
+    if (complaint.status !== 'RESOLVED') {
+      return sendError(
+        res,
+        400,
+        `Verification requires complaint to be in RESOLVED status (current status: ${complaint.status})`
+      );
+    }
+
+    let nextStatus = '';
+    let evidenceStatus = '';
+    let defaultNote = '';
+
+    if (approved) {
+      nextStatus = 'VERIFIED';
+      evidenceStatus = 'APPROVED';
+      defaultNote = 'Resolution approved and verified';
+
+      // Mark SLA as COMPLETED
+      if (complaint.sla && complaint.sla.deadline) {
+        slaService.evaluateSlaStatus(complaint);
+      }
+    } else {
+      nextStatus = 'REOPENED';
+      evidenceStatus = 'REJECTED';
+      defaultNote = 'Resolution rejected';
+    }
+
+    complaint.status = nextStatus;
+    await complaint.save();
+
+    // Update latest ResolutionEvidence record
+    const latestEvidence = await ResolutionEvidence.findOne({ complaint: complaint._id }).sort({
+      submittedAt: -1
+    });
+    if (latestEvidence) {
+      latestEvidence.status = evidenceStatus;
+      await latestEvidence.save();
+    }
+
+    // Create history update record
+    const updateRecord = await ComplaintUpdate.create({
+      complaint: complaint._id,
+      user: req.user._id,
+      status: nextStatus,
+      note: note && note.trim() !== '' ? note.trim() : defaultNote
+    });
+
+    const updatedComplaint = await Complaint.findById(complaint._id)
+      .populate('citizen', 'name email phone')
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
+
+    return sendSuccess(res, 200, `Complaint resolution ${approved ? 'approved' : 'rejected'}`, {
+      complaint: updatedComplaint.toJSON(),
+      updateRecord: updateRecord.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   PATCH /api/complaints/:id/close
+ * @desc    Close a verified complaint (Admin only)
+ * @access  Private (ADMIN)
+ */
+const closeComplaint = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return sendError(res, 400, 'Invalid complaint ID format');
+    }
+
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return sendError(res, 404, 'Complaint not found');
+    }
+
+    // Status check: MUST be VERIFIED before closing
+    if (complaint.status !== 'VERIFIED') {
+      return sendError(
+        res,
+        400,
+        `Complaint must be in VERIFIED status before closing (current status: ${complaint.status})`
+      );
+    }
+
+    complaint.status = 'CLOSED';
+
+    // Mark SLA as COMPLETED (preserving breach flag if breached)
+    if (complaint.sla && complaint.sla.deadline) {
+      slaService.evaluateSlaStatus(complaint);
+    }
+
+    await complaint.save();
+
+    // Create audit history record
+    const updateRecord = await ComplaintUpdate.create({
+      complaint: complaint._id,
+      user: req.user._id,
+      status: 'CLOSED',
+      note: note && note.trim() !== '' ? note.trim() : 'Complaint closed by admin'
+    });
+
+    const updatedComplaint = await Complaint.findById(complaint._id)
+      .populate('citizen', 'name email phone')
+      .populate('assignedWorker', 'name email phone')
+      .populate('department', 'name code category');
+
+    return sendSuccess(res, 200, 'Complaint closed successfully', {
+      complaint: updatedComplaint.toJSON(),
+      updateRecord: updateRecord.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createComplaint,
   getComplaints,
@@ -662,5 +974,10 @@ module.exports = {
   analyzeComplaint,
   overridePriority,
   overrideDepartment,
-  getComplaintSla
+  getComplaintSla,
+  submitResolution,
+  getResolutionEvidence,
+  verifyResolution,
+  closeComplaint
 };
+

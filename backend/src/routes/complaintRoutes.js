@@ -8,7 +8,11 @@ const {
   analyzeComplaint,
   overridePriority,
   overrideDepartment,
-  getComplaintSla
+  getComplaintSla,
+  submitResolution,
+  getResolutionEvidence,
+  verifyResolution,
+  closeComplaint
 } = require('../controllers/complaintController');
 const { authenticate, authorizeRoles } = require('../middleware/authMiddleware');
 
@@ -48,6 +52,34 @@ router.get('/:id/sla', authenticate, getComplaintSla);
  * @access  Private (CITIZEN, ADMIN)
  */
 router.post('/:id/analyze', authenticate, authorizeRoles('CITIZEN', 'ADMIN'), analyzeComplaint);
+
+/**
+ * @route   POST /api/complaints/:id/resolution
+ * @desc    Submit resolution evidence for complaint
+ * @access  Private (FIELD_WORKER, ADMIN)
+ */
+router.post('/:id/resolution', authenticate, authorizeRoles('FIELD_WORKER', 'ADMIN'), submitResolution);
+
+/**
+ * @route   GET /api/complaints/:id/resolution
+ * @desc    Get resolution evidence for complaint
+ * @access  Private
+ */
+router.get('/:id/resolution', authenticate, getResolutionEvidence);
+
+/**
+ * @route   PATCH /api/complaints/:id/verify
+ * @desc    Approve or reject complaint resolution
+ * @access  Private (CITIZEN, ADMIN)
+ */
+router.patch('/:id/verify', authenticate, authorizeRoles('CITIZEN', 'ADMIN'), verifyResolution);
+
+/**
+ * @route   PATCH /api/complaints/:id/close
+ * @desc    Close a verified complaint
+ * @access  Private (ADMIN)
+ */
+router.patch('/:id/close', authenticate, authorizeRoles('ADMIN'), closeComplaint);
 
 /**
  * @route   PATCH /api/complaints/:id/priority
