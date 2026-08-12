@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  
+  /* Civic CSS theme variables */
+  --color-civic-navy: #0B192C;
+  --color-civic-blue: #1E3A8A;
+  --color-civic-action: #2563EB;
+  --color-civic-action-hover: #1D4ED8;
+  --color-civic-muted: #475569;
+  --color-civic-border: #E2E8F0;
+  --color-civic-bg: #F8FAFC;
+  --color-civic-light-gray: #F1F5F9;
+  
+  --shadow-civic-subtle: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --shadow-civic-normal: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+}
+
+/* Restrict Leaflet default height/z-index if needed */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  font-family: inherit;
+}
