@@ -1,2 +1,2 @@
 Project readme File
-PS - CroudSourced Civic issue reporting and resolving management system
+PS - Croud Sourced Civic issue reporting and resolving management system
